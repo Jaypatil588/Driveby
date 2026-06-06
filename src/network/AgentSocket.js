@@ -26,8 +26,8 @@ export class AgentSocket {
       this._startSending();
     });
 
-    this.ws.addEventListener('message', (e) => {
-      const msg = JSON.parse(e.data);
+    this.ws.addEventListener('message', async (e) => {
+      const msg = JSON.parse(await decodeMessageData(e.data));
       if (msg.type === 'backend_status') {
         this._setStatus(msg.connected ? 'backend-connected' : 'waiting-for-backend');
         return;
@@ -91,4 +91,11 @@ export class AgentSocket {
     this._status = status;
     if (this.onStatus) this.onStatus(status);
   }
+}
+
+async function decodeMessageData(data) {
+  if (typeof data === 'string') return data;
+  if (data instanceof Blob) return data.text();
+  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+  throw new Error(`Unsupported WebSocket message payload: ${Object.prototype.toString.call(data)}`);
 }

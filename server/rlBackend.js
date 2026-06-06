@@ -27,6 +27,15 @@ function policyAction(agent, tick) {
     throw new Error(`Invalid observation for agent ${agent.id}: ${JSON.stringify(agent)}`);
   }
 
+  if (agent.collided) {
+    return {
+      id: agent.id,
+      reset: true,
+      generation: 1,
+      bestScore: Math.max(agent.score, 0)
+    };
+  }
+
   const route = getRoute(agent);
   const normalizedSpeed = agent.state[0];
   const waypointAngle = agent.state[3];
