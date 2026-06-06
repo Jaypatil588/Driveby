@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { fork } = require('child_process');
+const { spawn } = require('child_process');
 const { startRelay } = require('./wsRelay');
 
 const app = express();
@@ -14,10 +14,9 @@ app.listen(PORT, () => {
 
 startRelay(3001);
 
-const rlBackend = fork(path.join(__dirname, 'rlBackend.js'), {
+const rlBackend = spawn('python3', [path.join(__dirname, '..', 'rl', 'server.py')], {
   env: {
-    ...process.env,
-    RL_RELAY_URL: process.env.RL_RELAY_URL || 'ws://localhost:3001?type=rl_backend'
+    ...process.env
   },
   stdio: 'inherit'
 });
