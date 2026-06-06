@@ -3,3 +3,18 @@ node_modules/
 *.png
 4DoorSedan_V3_L2.123c1f42451e-71b9-4565-88fb-b07584a1dcd8/
 dist/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

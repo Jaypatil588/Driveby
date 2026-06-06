@@ -95,6 +95,10 @@ class PhysicsWorld {
     return handle;
   }
 
+  getBody(handle) {
+    return this.bodies.get(handle) ?? null;
+  }
+
   getPosition(handle) {
     const body = this.bodies.get(handle);
     if (!body) return { x: 0, y: 0, z: 0 };
@@ -107,6 +111,14 @@ class PhysicsWorld {
     if (body) {
       body.resetForces(true);
       body.addForce({ x: fx, y: fy, z: fz }, true);
+    }
+  }
+
+  removeBody(handle) {
+    const body = this.bodies.get(handle);
+    if (body) {
+      this.world.removeRigidBody(body);
+      this.bodies.delete(handle);
     }
   }
 

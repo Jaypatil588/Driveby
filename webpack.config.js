@@ -14,5 +14,16 @@ module.exports = {
     new webpack.DefinePlugin({
       'process.env.MAPBOX_TOKEN': JSON.stringify(process.env.MAPBOX_TOKEN || '')
     })
-  ]
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+      },
+    ],
+  },
+  experiments: {
+    asyncWebAssembly: true,
+  },
 };
