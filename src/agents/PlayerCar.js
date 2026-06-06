@@ -8,64 +8,69 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-// Builds a recognizable low-poly car from primitives, in metres, +X = forward.
+// Builds a car-shaped mesh by extruding a smooth side-profile across the width.
+// In metres, +X = forward, +Z = up. Renders reliably (pure procedural geometry).
 function buildCarMesh(scale, bodyColor = 0x2266dd) {
   const car = new THREE.Group();
 
-  const paint = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.5, roughness: 0.35 });
-  const tyre  = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, metalness: 0.1, roughness: 0.8 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.4, roughness: 0.15 });
-  const light = new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xffdd66, emissiveIntensity: 1.2 });
-  const tail  = new THREE.MeshStandardMaterial({ color: 0xff3322, emissive: 0xcc1100, emissiveIntensity: 1.0 });
+  const paint = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.55, roughness: 0.3 });
+  const tyre  = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, metalness: 0.1, roughness: 0.85 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x182838, metalness: 0.5, roughness: 0.12 });
+  const light = new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xffdd66, emissiveIntensity: 1.4 });
+  const tail  = new THREE.MeshStandardMaterial({ color: 0xff3322, emissive: 0xcc1100, emissiveIntensity: 1.1 });
 
-  const L = 4.4, W = 1.85;
-  const wheelR = 0.42, wheelW = 0.3;
-  const groundClear = 0.18;
-  const hullZ = wheelR + groundClear;   // bottom of hull above ground
-  const hullH = 0.55;                    // lower hull height
+  const L = 4.4, W = 1.8;
+  const wheelR = 0.40, wheelW = 0.32;
+  const floor = wheelR * 0.6; // body floor sits a bit above wheel centres
 
-  // ---- wheels first (tucked under, partly inside wheel wells) ----
-  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 18);
+  // --- side profile (a classic car silhouette) in the X(length)-Z(height) plane ---
+  const x0 = -L / 2, x1 = L / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x0 + 0.1, floor);                 // rear bottom
+  shape.lineTo(x1 - 0.1, floor);                 // front bottom
+  shape.lineTo(x1,        floor + 0.35);         // front bumper
+  shape.lineTo(x1 - 0.05, floor + 0.7);          // hood front
+  shape.lineTo(x1 - 1.25, floor + 0.78);         // hood/base of windshield
+  shape.lineTo(x1 - 1.95, floor + 1.35);         // windshield top (front of roof)
+  shape.lineTo(x0 + 1.55, floor + 1.4);          // roof rear
+  shape.lineTo(x0 + 0.75, floor + 0.82);         // rear window base
+  shape.lineTo(x0 + 0.05, floor + 0.75);         // trunk
+  shape.lineTo(x0,        floor + 0.4);           // rear bumper
+  shape.lineTo(x0 + 0.1,  floor);                 // close
+  shape.closePath();
+
+  const body = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, { depth: W, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 2 }),
+    paint
+  );
+  // Extrude runs along +Z; rotate so width is along Y, and centre it.
+  body.rotation.x = Math.PI / 2;
+  body.position.y = W / 2;
+  car.add(body);
+
+  // --- greenhouse / windows: a darker slab tucked under the roofline ---
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, W * 0.92, 0.5), glass);
+  cabin.position.set(-0.2, 0, floor + 1.05);
+  car.add(cabin);
+
+  // --- wheels ---
+  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 20);
   wheelGeo.rotateX(Math.PI / 2);
-  for (const x of [L * 0.31, -L * 0.31]) {
-    for (const y of [W / 2 - wheelW * 0.4, -(W / 2 - wheelW * 0.4)]) {
+  for (const x of [L * 0.3, -L * 0.3]) {
+    for (const y of [W / 2 - 0.05, -(W / 2 - 0.05)]) {
       const w = new THREE.Mesh(wheelGeo, tyre);
       w.position.set(x, y, wheelR);
       car.add(w);
     }
   }
 
-  // ---- lower hull (slightly narrower than track so wheels show) ----
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(L, W * 0.92, hullH), paint);
-  hull.position.set(0, 0, hullZ + hullH / 2);
-  car.add(hull);
-
-  // ---- hood + trunk taper: a thin top deck over front and rear ----
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(L * 0.98, W * 0.82, 0.18), paint);
-  deck.position.set(0, 0, hullZ + hullH + 0.05);
-  car.add(deck);
-
-  // ---- cabin: sits in the middle, narrower + sloped feel via smaller box ----
-  const cabinL = L * 0.46;
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(cabinL, W * 0.78, 0.5), paint);
-  cabin.position.set(-0.15, 0, hullZ + hullH + 0.35);
-  car.add(cabin);
-
-  // greenhouse (glass) wrapping the cabin
-  const green = new THREE.Mesh(new THREE.BoxGeometry(cabinL * 0.96, W * 0.8, 0.42), glass);
-  green.position.set(-0.15, 0, hullZ + hullH + 0.4);
-  car.add(green);
-
-  // ---- headlights (front +X) ----
-  for (const y of [W / 2 - 0.32, -(W / 2 - 0.32)]) {
-    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.2), light);
-    hl.position.set(L / 2 - 0.02, y, hullZ + hullH * 0.6);
+  // --- head/taillights ---
+  for (const y of [W / 2 - 0.3, -(W / 2 - 0.3)]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.22), light);
+    hl.position.set(L / 2 - 0.04, y, floor + 0.6);
     car.add(hl);
-  }
-  // ---- taillights (rear -X) ----
-  for (const y of [W / 2 - 0.32, -(W / 2 - 0.32)]) {
-    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.18), tail);
-    tl.position.set(-L / 2 + 0.02, y, hullZ + hullH * 0.6);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.2), tail);
+    tl.position.set(-L / 2 + 0.04, y, floor + 0.6);
     car.add(tl);
   }
 
