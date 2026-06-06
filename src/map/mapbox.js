@@ -21,6 +21,14 @@ export function initMap() {
       antialias: true,
     });
 
+    // suppress harmless "image not found" sprite warnings (style references
+    // POI icons not in the sprite sheet — irrelevant to us)
+    _map.on('styleimagemissing', (e) => {
+      if (!_map.hasImage(e.id)) {
+        _map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+      }
+    });
+
     // lock all user interaction
     _map.dragPan.disable();
     _map.scrollZoom.disable();
