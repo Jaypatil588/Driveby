@@ -53,15 +53,9 @@ class SFLayer {
   }
 
   render(gl, args) {
-    // Advance driving for THIS frame. onFrame moves the MAP (not the car in
-    // mercator space), and the car mesh is positioned at the map's current
-    // centre — so the car can never desync from the camera (no jitter).
-    if (this.onFrame) {
-      const now = performance.now();
-      const delta = Math.min((now - this._lastTime) / 1000, 0.05);
-      this._lastTime = now;
-      this.onFrame(delta);
-    }
+    // Pin the car mesh to the map centre using THIS frame's matrix so the mesh
+    // and projection stay consistent. Driving + camera happen in the rAF loop.
+    if (this.onFrame) this.onFrame();
 
     // MapLibre v5 passes a ProjectionData object; v4 a flat array.
     const m = Array.isArray(args)
@@ -74,7 +68,8 @@ class SFLayer {
     this.renderer.resetState();
     this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
-    this.map.triggerRepaint();
+    // NOTE: repaint is driven by the rAF loop in index.js, not here, so the
+    // camera (jumpTo) and physics run outside the render callback.
   }
 
   // Expose scene so other modules can add objects
