@@ -24,6 +24,12 @@ class SFLayer {
     this.camera = new THREE.Camera();
     this.renderer = null;
     this.map = null;
+
+    // Per-frame callback (driving + camera). Runs INSIDE render() so the car
+    // position and the map matrix are always computed for the same frame —
+    // this is what removes the jitter from a separate rAF loop.
+    this.onFrame = null;
+    this._lastTime = performance.now();
   }
 
   onAdd(map, gl) {
@@ -47,6 +53,15 @@ class SFLayer {
   }
 
   render(gl, args) {
+    // Run driving + camera update for THIS frame, before reading the matrix,
+    // so position and projection are always consistent (no jitter).
+    if (this.onFrame) {
+      const now = performance.now();
+      const delta = Math.min((now - this._lastTime) / 1000, 0.05);
+      this._lastTime = now;
+      this.onFrame(delta);
+    }
+
     // MapLibre v4 passes a flat array; v5 passes a ProjectionData object
     const m = Array.isArray(args)
       ? args
@@ -56,8 +71,6 @@ class SFLayer {
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
 
     this.renderer.resetState();
-    // Clear only the DEPTH buffer so our objects aren't clipped/torn by the
-    // depth values MapLibre left from drawing its 3D buildings + terrain.
     this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
     this.map.triggerRepaint();
