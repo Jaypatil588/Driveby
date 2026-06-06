@@ -8,16 +8,16 @@ import { PhysicsWorld } from './physics/PhysicsWorld.js';
 import { AgentManager } from './agents/AgentManager.js';
 import { AgentSocket } from './network/AgentSocket.js';
 import { buildColliders } from './physics/Colliders.js';
+import { TrainingHUD } from './ui/TrainingHUD.js';
 
 // Car start position: intersection of Market St and 1st St.
 const CAR_START = { lng: -122.3988, lat: 37.7916 };
-
-window.game = new Game();
 
 class Game {
 
   constructor() {
     this.keys = {};
+    this.rlSocketStatus = 'not-started';
     window.addEventListener('keydown', (e) => {
       this.keys[e.key.toLowerCase()] = true;
       if (e.key.startsWith('Arrow')) e.preventDefault();
@@ -32,6 +32,7 @@ class Game {
       'pointer-events:none;border-radius:4px;max-width:46ch;';
     document.body.appendChild(this.dbg);
     this.fps = 0; this.frames = 0; this.fpsT = 0;
+    this.infoPanel = document.getElementById('info');
 
     // start immediately — no terminal, no launch screen
     this.load();
@@ -74,7 +75,14 @@ class Game {
 
     // rl agents system
     this.agentManager = new AgentManager(this.physics, this.sfLayer);
-    this.agentSocket = new AgentSocket(this.agentManager);
+    this.agentSocket = new AgentSocket(this.agentManager, (status) => {
+      this.rlSocketStatus = status;
+    });
+    this.agentSocket.setEnvironment(this.traffic);
+    this.focusTarget = this.player;
+    this.trainingHud = new TrainingHUD(this.agentManager.agents, (agentId) => {
+      this.focusTarget = this.agentManager.getAgentById(agentId);
+    });
 
     // camera toggle (bird's eye <-> follow), C key
     this.cameraToggle = new CameraToggle(this.map, document.getElementById('hud'));
@@ -92,8 +100,9 @@ class Game {
     if (this.physics) this.physics.step(delta);
     this.player.update(delta, this.keys);
     if (this.traffic) this.traffic.update(delta);
-    if (this.agentManager) this.agentManager.update(delta);
-    this.cameraToggle.update(this.player);
+    if (this.agentManager) this.agentManager.update(delta, this.traffic);
+    this.cameraToggle.update(this.focusTarget);
+    this.trainingHud.update(this.agentManager.agents, this.traffic);
 
     const pos = this.player.getPosition();
     const speed = this.player.speed;
@@ -108,6 +117,27 @@ class Game {
       `heading:    ${(pos.heading * 180 / Math.PI).toFixed(1)}°\n` +
       `lng,lat:    ${pos.lng.toFixed(6)}, ${pos.lat.toFixed(6)}\n` +
       `bearing:    ${this.map.getBearing().toFixed(1)}°  pitch:${this.map.getPitch().toFixed(0)}  zoom:${this.map.getZoom().toFixed(2)}`;
+
+    this.updateInfoPanel();
+  }
+
+  updateInfoPanel() {
+    if (!this.infoPanel || !this.agentManager) return;
+
+    const stats = this.agentManager.getStats();
+    this.infoPanel.innerHTML = `
+      <h3>DriveBy RL Training</h3>
+      <p>Simulation-first training for dangerous edge cases before real cars touch the road.</p>
+      <div class="info-grid">
+        <div><span>RL agents</span><strong>${stats.total}</strong></div>
+        <div><span>Sensor feeds</span><strong>${stats.sensors}</strong></div>
+        <div><span>Backend</span><strong>${this.rlSocketStatus}</strong></div>
+        <div><span>RL controlled</span><strong>${stats.rlControlled}/${stats.total}</strong></div>
+      </div>
+      <div class="info-foot">Cyan beacons mark RL-enabled vehicles. WASD/Arrows drive. C toggles camera.</div>
+    `;
   }
 
 }
+
+window.game = new Game();

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LoadingManager } from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { SF_CENTER } from './mapbox.js';
-import { mercatorScale, worldToMap } from './sfLayer.js';
+import { METRE, worldToMapbox } from './sfLayer.js';
 
 const ASSET_ROOT = '/assets/models/sf-lowpoly/';
 const MODEL_URL = `${ASSET_ROOT}SanFrancisco_City.fbx`;
@@ -91,9 +91,9 @@ export function loadLowPolyCity(scene, renderer) {
 
       const city = new THREE.Group();
       city.name = 'SF Low Poly City';
-      city.position.copy(worldToMap(SF_CENTER[0], SF_CENTER[1], 0));
+      city.position.copy(worldToMapbox(SF_CENTER[0], SF_CENTER[1], 0));
       city.rotation.x = Math.PI / 2;
-      city.scale.setScalar(mercatorScale() * METRES_PER_MODEL_UNIT);
+      city.scale.setScalar(METRE * METRES_PER_MODEL_UNIT);
       city.add(model);
 
       scene.add(city);
@@ -108,25 +108,18 @@ export function loadLowPolyCity(scene, renderer) {
       reject(new Error(`Failed to load SF low-poly asset: ${url}`));
     };
 
-    try {
-      loader.load(
-        MODEL_URL,
-        (model) => {
-          loadedModel = model;
-        },
-        undefined,
-        (error) => {
-          if (!settled) {
-            settled = true;
-            reject(error);
-          }
+    loader.load(
+      MODEL_URL,
+      (model) => {
+        loadedModel = model;
+      },
+      undefined,
+      (error) => {
+        if (!settled) {
+          settled = true;
+          reject(error);
         }
-      );
-    } catch (error) {
-      if (!settled) {
-        settled = true;
-        reject(error);
       }
-    }
+    );
   });
 }

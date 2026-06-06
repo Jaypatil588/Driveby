@@ -29,6 +29,22 @@ function worldToMapbox(lng, lat, altitude = 0) {
   );
 }
 
+function mapboxWorldToLngLat(x, z) {
+  const p = new mapboxgl.MercatorCoordinate(
+    ORIGIN_MERCATOR.x + x * METRE,
+    ORIGIN_MERCATOR.y + z * METRE,
+    ORIGIN_MERCATOR.z
+  );
+  const lngLat = p.toLngLat();
+  return { lng: lngLat.lng, lat: lngLat.lat };
+}
+
+function mercatorScale() {
+  return 1;
+}
+
+const worldToMap = worldToMapbox;
+
 // Mapbox custom layer that renders a Three.js scene sharing Mapbox's WebGL
 // context, aligned to the map's coordinate system.
 class SFLayer {
@@ -93,4 +109,4 @@ class SFLayer {
 
 }
 
-export { SFLayer, worldToMapbox, SF_ORIGIN, METRE };
+export { SFLayer, worldToMapbox, worldToMap, mapboxWorldToLngLat, mercatorScale, SF_ORIGIN, METRE };

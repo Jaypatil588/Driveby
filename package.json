@@ -9,7 +9,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "webpack --mode production",
-    "dev": "webpack --mode development --watch"
+    "dev": "webpack --mode development --watch",
+    "start": "node server/index.js",
+    "rl:demo": "node server/rlBackend.js"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

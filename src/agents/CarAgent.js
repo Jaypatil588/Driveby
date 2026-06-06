@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { worldToMapbox } from '../map/sfLayer.js';
+import { mapboxWorldToLngLat, worldToMapbox } from '../map/sfLayer.js';
 
 const MAX_SPEED_MS = 12;
 
 export class CarAgent {
-  constructor(id, lng, lat, physicsWorld, scene, hue) {
+  constructor(id, lng, lat, physicsWorld, scene, hue, rlEnabled = false) {
     this.id = id;
     this.scene = scene;
     this.physicsWorld = physicsWorld;
+    this.rlEnabled = rlEnabled;
+    this._rlActionAge = Infinity;
 
     this.pos = worldToMapbox(lng, lat, 0);
     this.heading = Math.random() * Math.PI * 2;
@@ -27,49 +29,63 @@ export class CarAgent {
 
   _spawnMesh() {
     const sedanModel = window.game.assets?.models['sedan'];
-    if (sedanModel) {
-      const carModel = sedanModel.clone();
-      
-      const box = new THREE.Box3().setFromObject(carModel);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      
-      const targetLength = 4.8;
-      const scale = targetLength / size.z;
-      carModel.scale.set(scale, scale, scale);
-      carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-      
-      carModel.rotateX(-Math.PI / 2);
+    if (!sedanModel) {
+      throw new Error(`CarAgent ${this.id} requires assets.models.sedan to be loaded.`);
+    }
 
-      carModel.traverse((node) => {
-        if (node.isMesh && node.material) {
-          if (Array.isArray(node.material)) {
-            node.material = node.material.map((mat) => {
-              const m = mat.clone();
-              if (m.color && (m.name === 'blinn2SG' || m.name === 'dull')) {
-                m.color.setHex(this._colorHex);
-              }
-              return m;
-            });
-          } else {
-            node.material = node.material.clone();
-            if (node.material.color && (node.material.name === 'blinn2SG' || node.material.name === 'dull')) {
-              node.material.color.setHex(this._colorHex);
+    const carModel = sedanModel.clone();
+
+    const box = new THREE.Box3().setFromObject(carModel);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    const targetLength = 4.8;
+    const scale = targetLength / size.z;
+    carModel.scale.set(scale, scale, scale);
+    carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+    carModel.rotateX(-Math.PI / 2);
+
+    carModel.traverse((node) => {
+      if (node.isMesh && node.material) {
+        if (Array.isArray(node.material)) {
+          node.material = node.material.map((mat) => {
+            const m = mat.clone();
+            if (m.color && (m.name === 'blinn2SG' || m.name === 'dull')) {
+              m.color.setHex(this._colorHex);
             }
+            return m;
+          });
+        } else {
+          node.material = node.material.clone();
+          if (node.material.color && (node.material.name === 'blinn2SG' || node.material.name === 'dull')) {
+            node.material.color.setHex(this._colorHex);
           }
         }
-      });
-      
-      this.mesh.add(carModel);
-    } else {
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry( 2, 1.4, 4.6 ),
-        new THREE.MeshStandardMaterial({ color: this._colorHex, roughness: 0.5 })
+      }
+    });
+
+    this.mesh.add(carModel);
+
+    if (this.rlEnabled) {
+      const beacon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 3.2, 12),
+        new THREE.MeshBasicMaterial({ color: 0x00fff7 })
       );
-      body.position.y = 0.7;
-      this.mesh.add(body);
+      beacon.position.y = 2.4;
+      beacon.name = 'RL enabled beacon';
+      this.mesh.add(beacon);
+
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(1.7, 0.05, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00ff95 })
+      );
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.08;
+      halo.name = 'RL enabled footprint';
+      this.mesh.add(halo);
     }
 
     this.scene.add(this.mesh);
@@ -88,7 +104,12 @@ export class CarAgent {
     this.heading += this._turnDir * 0.35 * delta;
   }
 
-  applyAction({ throttle = 0, steering = 0, brake = 0 }) {
+  applyAction(action) {
+    const { throttle, steering, brake } = action;
+    if (![throttle, steering, brake].every(Number.isFinite)) {
+      throw new Error(`Invalid RL action for agent ${this.id}: throttle, steering, and brake must be finite numbers.`);
+    }
+
     const maxSpd = MAX_SPEED_MS;
     const accel = 6;
     this.speed = THREE.MathUtils.clamp(
@@ -98,9 +119,16 @@ export class CarAgent {
     this.heading += steering * 1.4 * (this.speed / maxSpd) * (1/60);
   }
 
+  markRlControlled() {
+    this._rlActionAge = 0;
+  }
+
   update(delta) {
-    this._ruleBased(delta);
-    
+    this._rlActionAge += delta;
+    if (!this.rlEnabled) {
+      this._ruleBased(delta);
+    }
+
     // X is east, Z is south in Three.js world coordinates
     this.pos.x += Math.sin(this.heading) * this.speed * delta;
     this.pos.z += Math.cos(this.heading) * this.speed * delta;
@@ -109,6 +137,15 @@ export class CarAgent {
       this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
       this.mesh.rotation.set(0, this.heading, 0);
     }
+  }
+
+  isRlControlled() {
+    return this.rlEnabled && this._rlActionAge < 0.5;
+  }
+
+  getPosition() {
+    const { lng, lat } = mapboxWorldToLngLat(this.pos.x, this.pos.z);
+    return { lng, lat, heading: this.heading };
   }
 
   getObservation() {

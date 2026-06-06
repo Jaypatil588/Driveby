@@ -1,6 +1,6 @@
 # DriveBy — SF Multi-Agent RL Driving Environment
 
-A browser-based reinforcement learning environment set in real San Francisco downtown. Up to 100 autonomous car agents drive simultaneously through the SF Financial District, each trainable to drive like a Waymo. A human player can take control at any time using WASD keys.
+A browser-based reinforcement learning environment set in real San Francisco downtown. Ten autonomous car agents drive simultaneously through the SF Financial District, each wired for backend-driven policy actions. A human player can take control at any time using WASD keys.
 
 Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Beene — the Three.js renderer setup and Bladerunner Sedan car model are derived from that project.
 
@@ -15,7 +15,7 @@ Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Been
 | Physics & collision | Rapier.js (WASM, runs in browser) |
 | Web server | Node.js + Express |
 | Real-time comms | WebSocket |
-| RL backend (optional) | Python — FastAPI + Ray RLlib |
+| RL backend | Node.js demo policy over WebSocket |
 
 ---
 
@@ -47,10 +47,20 @@ npm run dev
 ### 3. Start the server
 
 ```bash
-node server/index.js
+npm start
 ```
 
 Then open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. Start the RL backend
+
+In another terminal:
+
+```bash
+npm run rl:demo
+```
+
+The in-app backend indicator should change from `waiting-for-backend` to `backend-connected`, and `RL controlled` should update as action messages arrive.
 
 ---
 
@@ -78,7 +88,7 @@ Then open [http://localhost:3000](http://localhost:3000) in your browser.
 │   ├── agents/
 │   │   ├── PlayerCar.js      — human-controlled car (WASD)
 │   │   ├── CarAgent.js       — single AI agent
-│   │   ├── AgentManager.js   — spawns and updates all 100 agents
+│   │   ├── AgentManager.js   — spawns and updates all 10 RL-enabled agents
 │   │   └── SensorCamera.js   — WebGLRenderTarget front/back/side cameras
 │   ├── physics/
 │   │   ├── PhysicsWorld.js   — Rapier.js world
@@ -89,17 +99,18 @@ Then open [http://localhost:3000](http://localhost:3000) in your browser.
 │       └── CameraToggle.js   — bird's eye and follow camera manager
 └── server/
     ├── index.js              — Express static server (port 3000)
-    └── wsRelay.js            — WebSocket relay to Python RL backend (port 3001)
+    ├── rlBackend.js          — demo policy backend that sends actions
+    └── wsRelay.js            — WebSocket relay to RL backend (port 3001)
 ```
 
 ---
 
-## Connecting the RL Backend (optional)
+## Connecting the RL Backend
 
-The browser falls back to rule-based driving if no RL backend is connected. To connect a Python backend:
+The browser waits for an RL backend. If no backend is connected, the agents remain visible but do not receive policy actions.
 
-1. Start the Node server (`node server/index.js`)
-2. Connect your Python client to `ws://localhost:3001?type=rl_backend`
+1. Start the Node server (`npm start`)
+2. Run the included demo backend (`npm run rl:demo`) or connect your own backend to `ws://localhost:3001?type=rl_backend`
 3. Receive observation JSON, send back action JSON per the message format below
 
 **Observation (browser → backend):**

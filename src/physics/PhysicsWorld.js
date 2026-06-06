@@ -48,8 +48,7 @@ class PhysicsWorld {
 
   addBoxCollider(x, y, z, halfW, halfH, halfD, isStatic) {
     if (!this.world) {
-      console.warn("PhysicsWorld: Cannot add box collider, world not initialized.");
-      return null;
+      throw new Error("PhysicsWorld: Cannot add box collider, world not initialized.");
     }
 
     const bodyDesc = isStatic 
@@ -69,8 +68,7 @@ class PhysicsWorld {
 
   addCarCollider(x, y, z) {
     if (!this.world) {
-      console.warn("PhysicsWorld: Cannot add car collider, world not initialized.");
-      return null;
+      throw new Error("PhysicsWorld: Cannot add car collider, world not initialized.");
     }
 
     // Car bounding box: width = 2.0, height = 1.5, length = 4.8
@@ -83,8 +81,8 @@ class PhysicsWorld {
     bodyDesc.setTranslation(x, y, z);
     
     // Lock translation along Y and lock rotation on X and Z (no tip over or flight)
-    bodyDesc.setEnabledTranslations(true, false, true);
-    bodyDesc.setEnabledRotations(false, true, false);
+    bodyDesc.enabledTranslations(true, false, true);
+    bodyDesc.enabledRotations(false, true, false);
 
     const body = this.world.createRigidBody(bodyDesc);
     const colliderDesc = RAPIER.ColliderDesc.cuboid(halfW, halfH, halfD);
@@ -101,7 +99,7 @@ class PhysicsWorld {
 
   getPosition(handle) {
     const body = this.bodies.get(handle);
-    if (!body) return { x: 0, y: 0, z: 0 };
+    if (!body) throw new Error(`PhysicsWorld: Unknown body handle ${handle}.`);
     const translation = body.translation();
     return { x: translation.x, y: translation.y, z: translation.z };
   }

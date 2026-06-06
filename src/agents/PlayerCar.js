@@ -1,4 +1,4 @@
-import { Group, Mesh, BoxGeometry, MeshStandardMaterial, Box3, Vector3 } from 'three';
+import { Group, Box3, Vector3 } from 'three';
 import { worldToMapbox } from '../map/sfLayer.js';
 
 const mapboxgl = window.mapboxgl;
@@ -29,42 +29,29 @@ class PlayerCar {
     this.mesh = new Group();
 
     const sedanModel = window.game.assets?.models['sedan'];
-    if (sedanModel) {
-      const carModel = sedanModel.clone();
-      
-      // Rotate the model by -90 degrees around X so it lies flat on the road (right side up)
-      carModel.rotateX(-Math.PI / 2);
-      
-      const box = new Box3().setFromObject(carModel);
-      const size = new Vector3();
-      box.getSize(size);
-      const center = new Vector3();
-      box.getCenter(center);
-      
-      const targetLength = 4.8;
-      const scale = targetLength / size.z;
-      carModel.scale.set(scale, scale, scale);
-      
-      // Center the model so it sits on y = 0
-      carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-      
-      this.mesh.add(carModel);
-    } else {
-      const body = new Mesh(
-        new BoxGeometry( 2, 1.5, 4.5 ),                 // width, height, length
-        new MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x004f5c })
-      );
-      body.position.y = 0.75;                            // sit on the ground
-      this.mesh.add( body );
-
-      // contrasting nose so the facing direction is obvious
-      const nose = new Mesh(
-        new BoxGeometry( 2, 0.6, 1 ),
-        new MeshStandardMaterial({ color: 0xff2266, emissive: 0x5c0011 })
-      );
-      nose.position.set( 0, 0.75, 2.5 );                 // front of the car (+Z)
-      this.mesh.add( nose );
+    if (!sedanModel) {
+      throw new Error('PlayerCar requires assets.models.sedan to be loaded.');
     }
+
+    const carModel = sedanModel.clone();
+
+    // Rotate the model by -90 degrees around X so it lies flat on the road (right side up)
+    carModel.rotateX(-Math.PI / 2);
+
+    const box = new Box3().setFromObject(carModel);
+    const size = new Vector3();
+    box.getSize(size);
+    const center = new Vector3();
+    box.getCenter(center);
+
+    const targetLength = 4.8;
+    const scale = targetLength / size.z;
+    carModel.scale.set(scale, scale, scale);
+
+    // Center the model so it sits on y = 0
+    carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+    this.mesh.add(carModel);
 
     this.syncMesh();
     this.scene.add( this.mesh );

@@ -64,7 +64,7 @@ class TrafficManager {
         const dLng = route.end.lng - route.start.lng;
         const dLat = route.end.lat - route.start.lat;
         const length = Math.sqrt(dLng * dLng + dLat * dLat);
-        
+
         // Perpendicular offset (about 6 meters in degrees)
         const offsetDist = 0.00006;
         const pLng = (-dLat / length) * offsetDist;
@@ -93,7 +93,7 @@ class TrafficManager {
         const dLng = route.end.lng - route.start.lng;
         const dLat = route.end.lat - route.start.lat;
         const length = Math.sqrt(dLng * dLng + dLat * dLat);
-        
+
         const offsetDist = 0.00006;
         const pLng = (-dLat / length) * offsetDist * (j === 0 ? 1 : -1);
         const pLat = (dLng / length) * offsetDist * (j === 0 ? 1 : -1);
@@ -121,14 +121,14 @@ class TrafficManager {
 
   createTree(lng, lat) {
     const group = new Group();
-    
+
     // Trunk
     const trunkGeo = new CylinderGeometry(0.12, 0.18, 1.8, 8);
     const trunkMat = new MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9 });
     const trunk = new Mesh(trunkGeo, trunkMat);
     trunk.position.y = 0.9;
     group.add(trunk);
-    
+
     // Foliage
     const canopyGeo = new ConeGeometry(1.0, 2.2, 8);
     const canopyMat = new MeshStandardMaterial({ color: 0x2e8b57, roughness: 0.7 });
@@ -151,14 +151,14 @@ class TrafficManager {
 
   createPedestrian(startLng, startLat, endLng, endLat, color, initialProgress) {
     const group = new Group();
-    
+
     // Body (color coat)
     const bodyGeo = new CylinderGeometry(0.18, 0.18, 1.1, 8);
     const bodyMat = new MeshStandardMaterial({ color: color, roughness: 0.6 });
     const body = new Mesh(bodyGeo, bodyMat);
     body.position.y = 0.55;
     group.add(body);
-    
+
     // Head
     const headGeo = new SphereGeometry(0.15, 8, 8);
     const headMat = new MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
@@ -182,53 +182,47 @@ class TrafficManager {
     const mesh = new Group();
 
     const sedanModel = window.game.assets?.models['sedan'];
-    if (sedanModel) {
-      const carModel = sedanModel.clone();
-      
-      const box = new Box3().setFromObject(carModel);
-      const size = new Vector3();
-      box.getSize(size);
-      const center = new Vector3();
-      box.getCenter(center);
-      
-      const targetLength = 4.8;
-      const scale = targetLength / size.z;
-      carModel.scale.set(scale, scale, scale);
-      carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-      
-      // Rotate -90 deg around X so it lies flat on the road (right side up)
-      carModel.rotateX(-Math.PI / 2);
+    if (!sedanModel) {
+      throw new Error('TrafficManager requires assets.models.sedan to be loaded.');
+    }
 
-      // Color the car body paint
-      carModel.traverse((node) => {
-        if (node.isMesh && node.material) {
-          if (Array.isArray(node.material)) {
-            node.material = node.material.map((mat) => {
-              const m = mat.clone();
-              if (m.color && (m.name === 'blinn2SG' || m.name === 'dull')) {
-                m.color.setHex(colorHex);
-              }
-              return m;
-            });
-          } else {
-            node.material = node.material.clone();
-            if (node.material.color && (node.material.name === 'blinn2SG' || node.material.name === 'dull')) {
-              node.material.color.setHex(colorHex);
+    const carModel = sedanModel.clone();
+
+    const box = new Box3().setFromObject(carModel);
+    const size = new Vector3();
+    box.getSize(size);
+    const center = new Vector3();
+    box.getCenter(center);
+
+    const targetLength = 4.8;
+    const scale = targetLength / size.z;
+    carModel.scale.set(scale, scale, scale);
+    carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+    // Rotate -90 deg around X so it lies flat on the road (right side up)
+    carModel.rotateX(-Math.PI / 2);
+
+    // Color the car body paint
+    carModel.traverse((node) => {
+      if (node.isMesh && node.material) {
+        if (Array.isArray(node.material)) {
+          node.material = node.material.map((mat) => {
+            const m = mat.clone();
+            if (m.color && (m.name === 'blinn2SG' || m.name === 'dull')) {
+              m.color.setHex(colorHex);
             }
+            return m;
+          });
+        } else {
+          node.material = node.material.clone();
+          if (node.material.color && (node.material.name === 'blinn2SG' || node.material.name === 'dull')) {
+            node.material.color.setHex(colorHex);
           }
         }
-      });
-      
-      mesh.add(carModel);
-    } else {
-      // Fallback Box car
-      const body = new Mesh(
-        new BoxGeometry( 2, 1.4, 4.6 ),
-        new MeshStandardMaterial({ color: colorHex, roughness: 0.5 })
-      );
-      body.position.y = 0.7;
-      mesh.add(body);
-    }
+      }
+    });
+
+    mesh.add(carModel);
 
     this.scene.add(mesh);
 
@@ -255,44 +249,44 @@ class TrafficManager {
 
   createTrafficLight(lng, lat, index) {
     const group = new Group();
-    
+
     // Pole
     const postGeo = new CylinderGeometry(0.06, 0.08, 3.2, 8);
     const postMat = new MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.2 });
     const post = new Mesh(postGeo, postMat);
     post.position.y = 1.6;
     group.add(post);
-    
+
     // Head housing
     const headGeo = new BoxGeometry(0.3, 0.8, 0.3);
     const headMat = new MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
     const head = new Mesh(headGeo, headMat);
     head.position.set(0, 3.0, 0);
     group.add(head);
-    
+
     // Light spheres (Red, Yellow, Green)
     const lightGeo = new SphereGeometry(0.08, 8, 8);
-    
+
     // Create separate materials for each signal head light
     const redMat = new MeshStandardMaterial({ color: 0x330000, emissive: 0x000000, roughness: 0.5 });
     const yellowMat = new MeshStandardMaterial({ color: 0x333300, emissive: 0x000000, roughness: 0.5 });
     const greenMat = new MeshStandardMaterial({ color: 0x003300, emissive: 0x000000, roughness: 0.5 });
-    
+
     const redLight = new Mesh(lightGeo, redMat);
     redLight.position.set(0, 3.25, 0.15);
     group.add(redLight);
-    
+
     const yellowLight = new Mesh(lightGeo, yellowMat);
     yellowLight.position.set(0, 3.0, 0.15);
     group.add(yellowLight);
-    
+
     const greenLight = new Mesh(lightGeo, greenMat);
     greenLight.position.set(0, 2.75, 0.15);
     group.add(greenLight);
 
     const pos = worldToMapbox(lng, lat);
     group.position.copy(pos);
-    
+
     // Face the intersection center
     const centerPos = worldToMapbox(-122.3988, 37.7916);
     const angle = Math.atan2(centerPos.x - pos.x, centerPos.z - pos.z);
@@ -301,8 +295,8 @@ class TrafficManager {
     this.scene.add(group);
 
     // Stagger cycles by index so perpendicular directions alternate signals
-    const initialCycleTime = (index % 2 === 0) ? 0 : 5; 
-    
+    const initialCycleTime = (index % 2 === 0) ? 0 : 5;
+
     this.trafficLights.push({
       mesh: group,
       redMat,
@@ -318,7 +312,7 @@ class TrafficManager {
     // 1. Update Pedestrians
     this.pedestrians.forEach((ped) => {
       ped.progress += ped.speed * ped.direction * delta;
-      
+
       if (ped.progress >= 1.0) {
         ped.progress = 1.0;
         ped.direction = -1;
@@ -344,7 +338,7 @@ class TrafficManager {
     // 2. Update Cars
     this.cars.forEach((car) => {
       car.progress += car.speed * delta;
-      
+
       if (car.progress >= 1.0) {
         car.progress = 0.0; // Loop back
       }
@@ -359,7 +353,7 @@ class TrafficManager {
       // Rotate towards driving direction
       const dLng = car.route.end.lng - car.route.start.lng;
       const dLat = car.route.end.lat - car.route.start.lat;
-      
+
       // Mapbox direction heading matching
       const heading = Math.atan2(dLng, -dLat);
       car.mesh.rotation.y = heading;
@@ -368,7 +362,7 @@ class TrafficManager {
     // 3. Update Traffic Lights (Green 5s -> Yellow 2s -> Red 5s)
     this.trafficLights.forEach((light) => {
       light.cycleTime = (light.cycleTime + delta) % 12;
-      
+
       let state; // 0 = Green, 1 = Yellow, 2 = Red
       if (light.cycleTime < 5) {
         state = 0;
@@ -377,7 +371,7 @@ class TrafficManager {
       } else {
         state = 2;
       }
-      
+
       if (state === 0) {
         light.greenMat.color.setHex(0x00ff00);
         light.greenMat.emissive.setHex(0x00ff00);

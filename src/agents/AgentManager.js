@@ -1,5 +1,6 @@
-import { CarAgent } from './CarAgent.js';
+import { NeuralAgent } from './NeuralAgent.js';
 import { SensorCamera } from './SensorCamera.js';
+import { RoadGraph } from '../map/RoadGraph.js';
 
 // 20 spawn points on real SF streets (Market, Montgomery, Kearny, etc.)
 const SPAWN_POINTS = [
@@ -12,8 +13,8 @@ const SPAWN_POINTS = [
   [-122.3956, 37.7958], [-122.4002, 37.7963],
 ];
 
-const AGENT_COUNT = 100;
-const SENSORS_ENABLED = 10; // Only attach sensors to first 10 to preserve FPS
+const AGENT_COUNT = 10;
+const SENSORS_ENABLED = 10;
 
 export class AgentManager {
   constructor(physicsWorld, sfLayer) {
@@ -21,6 +22,7 @@ export class AgentManager {
     this._actionQueue = new Map(); // id → action
     this.sfLayer = sfLayer;
     this._camerasInitialized = false;
+    this.roadGraph = new RoadGraph();
 
     for (let i = 0; i < AGENT_COUNT; i++) {
       const spawn = SPAWN_POINTS[i % SPAWN_POINTS.length];
@@ -28,11 +30,11 @@ export class AgentManager {
       const lng = spawn[0] + (Math.random() - 0.5) * 0.0002;
       const lat = spawn[1] + (Math.random() - 0.5) * 0.0002;
       const hue = i / AGENT_COUNT;
-      this.agents.push(new CarAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue));
+      this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph));
     }
   }
 
-  update(delta) {
+  update(delta, environment) {
     // Lazily attach cameras once renderer is initialized
     if (!this._camerasInitialized && this.sfLayer.renderer) {
       for (let i = 0; i < SENSORS_ENABLED; i++) {
@@ -44,10 +46,11 @@ export class AgentManager {
 
     for (const agent of this.agents) {
       if (this._actionQueue.has(agent.id)) {
-        agent.applyAction(this._actionQueue.get(agent.id));
+        agent.lastAction = this._actionQueue.get(agent.id);
+        agent.markRlControlled();
         this._actionQueue.delete(agent.id);
       }
-      agent.update(delta);
+      agent.update(delta, this.agents, environment);
     }
   }
 
@@ -57,7 +60,43 @@ export class AgentManager {
 
   applyActions(actions) {
     for (const action of actions) {
-      this._actionQueue.set(action.id, action);
+      if (typeof action.id !== 'number') {
+        throw new Error('RL action is missing numeric id.');
+      }
+      const agent = this.getAgentById(action.id);
+
+      if (action.reset) {
+        agent.reset(true);
+      } else {
+        for (const key of ['throttle', 'steering', 'brake']) {
+          if (!Number.isFinite(action[key])) {
+            throw new Error(`RL action for agent ${action.id} is missing finite ${key}.`);
+          }
+        }
+        this._actionQueue.set(action.id, action);
+      }
+
+      if (action.generation !== undefined) agent.generation = action.generation;
+      if (action.bestScore !== undefined) agent.bestScore = action.bestScore;
     }
+  }
+
+  getAgentById(id) {
+    const agent = this.agents.find((candidate) => candidate.id === id);
+    if (!agent) {
+      throw new Error(`No agent exists with id ${id}.`);
+    }
+    return agent;
+  }
+
+  getStats() {
+    const rlControlled = this.agents.filter((agent) => agent.isRlControlled()).length;
+    const avgSpeed = this.agents.reduce((sum, agent) => sum + Math.abs(agent.speed), 0) / this.agents.length;
+    return {
+      total: this.agents.length,
+      sensors: SENSORS_ENABLED,
+      rlControlled,
+      avgSpeed
+    };
   }
 }
