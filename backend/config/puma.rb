@@ -37,3 +37,13 @@ plugin :tmp_restart
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.
 # In other environments, only set the PID file if requested.
 pidfile ENV["PIDFILE"] if ENV["PIDFILE"]
+
+# Start the DriveBy WebSocket relay and Python RL supervisor after Puma boots.
+after_booted do
+  require_relative "../lib/driveby/boot"
+  Driveby::Boot.start!
+end
+
+after_stopped do
+  Driveby::Boot.stop! if defined?(Driveby::Boot)
+end
