@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>DriveBy</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #000; overflow: hidden; }
+
+      #map {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+      }
+
+      #cam-label {
+        position: absolute;
+        top: 12px; left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-family: monospace;
+        font-size: 13px;
+        background: rgba(0,0,0,0.55);
+        padding: 4px 10px;
+        border-radius: 4px;
+        pointer-events: none;
+        user-select: none;
+      }
+
+      #hud {
+        position: absolute;
+        bottom: 16px; left: 16px;
+        color: #ccc;
+        font-family: monospace;
+        font-size: 12px;
+        background: rgba(0,0,0,0.5);
+        padding: 8px 12px;
+        border-radius: 4px;
+        pointer-events: none;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="cam-label">[C] Bird's Eye</div>
+    <div id="hud">
+      WASD / Arrow keys — drive<br>
+      C — toggle camera
+    </div>
+    <script src="dist/main.js" defer></script>
+  </body>
+</html>
