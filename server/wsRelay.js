@@ -27,14 +27,15 @@ function startRelay(port = 3001) {
         rlBackend = null;
         sendBackendStatus();
       });
-    } else {
-      // default: browser client
+    } else if (type === 'browser') {
       browser = ws;
       sendBackendStatus();
       ws.on('message', (data) => {
         if (rlBackend && rlBackend.readyState === 1) rlBackend.send(data);
       });
       ws.on('close', () => { browser = null; });
+    } else {
+      ws.close(1008, `Unexpected client type: ${type}`);
     }
   });
 

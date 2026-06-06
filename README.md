@@ -15,7 +15,7 @@ Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Been
 | Physics & collision | Rapier.js (WASM, runs in browser) |
 | Web server | Node.js + Express |
 | Real-time comms | WebSocket |
-| RL backend | Node.js demo policy over WebSocket |
+| RL backend | Python PyTorch policy over WebSocket |
 
 ---
 
@@ -25,6 +25,7 @@ Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Been
 
 - [Node.js](https://nodejs.org/en) v18+
 - npm (comes with Node)
+- Python 3 with `torch` and `websocket-client`
 
 ### 1. Install dependencies
 
@@ -32,35 +33,30 @@ Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Been
 npm install
 ```
 
-### 2. Build the frontend
-
-```bash
-npm run build
-```
-
-For live rebuilding during development:
+### 2. Start the full dev stack
 
 ```bash
 npm run dev
 ```
 
-### 3. Start the server
-
-```bash
-npm start
-```
+This clears ports `3000` and `3001`, starts webpack in watch mode, starts the Express server, starts the WebSocket relay, and launches the Python PyTorch RL backend.
 
 Then open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Start the RL backend
-
-In another terminal:
+### Production build
 
 ```bash
-npm run rl:demo
+npm run build
 ```
 
-The in-app backend indicator should change from `waiting-for-backend` to `backend-connected`, and `RL controlled` should update as action messages arrive.
+### Start components individually
+
+```bash
+npm start
+npm run rl:backend
+```
+
+The in-app backend indicator should show `backend-connected`, and `RL controlled` should update as action messages arrive.
 
 ---
 
@@ -98,8 +94,8 @@ The in-app backend indicator should change from `waiting-for-backend` to `backen
 │   └── ui/
 │       └── CameraToggle.js   — bird's eye and follow camera manager
 └── server/
-    ├── index.js              — Express static server (port 3000)
-    ├── rlBackend.js          — demo policy backend that sends actions
+    ├── dev.js                — full dev stack launcher
+    ├── index.js              — Express server, WebSocket relay, and RL backend launcher
     └── wsRelay.js            — WebSocket relay to RL backend (port 3001)
 ```
 
@@ -107,10 +103,10 @@ The in-app backend indicator should change from `waiting-for-backend` to `backen
 
 ## Connecting the RL Backend
 
-The browser waits for an RL backend. If no backend is connected, the agents remain visible but do not receive policy actions.
+The browser sends observations to the RL backend through `ws://localhost:3001?type=browser`. The PyTorch backend connects through `ws://localhost:3001?type=rl_backend`.
 
-1. Start the Node server (`npm start`)
-2. Run the included demo backend (`npm run rl:demo`) or connect your own backend to `ws://localhost:3001?type=rl_backend`
+1. Start the full stack (`npm run dev`)
+2. Or start components individually with `npm start` and `npm run rl:backend`
 3. Receive observation JSON, send back action JSON per the message format below
 
 **Observation (browser → backend):**
@@ -118,7 +114,7 @@ The browser waits for an RL backend. If no backend is connected, the agents rema
 {
   "type": "observations",
   "tick": 1234,
-  "agents": [{ "id": 0, "x": 0.512, "y": 0.734, "heading": 1.2, "speed": 0.0003 }]
+  "agents": [{ "id": 0, "state": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6], "collided": false, "score": 12.3 }]
 }
 ```
 

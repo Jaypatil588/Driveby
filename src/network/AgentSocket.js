@@ -1,4 +1,4 @@
-const WS_URL = 'ws://localhost:3001';
+const WS_URL = 'ws://localhost:3001?type=browser';
 const SEND_INTERVAL_MS = 100;
 
 export class AgentSocket {

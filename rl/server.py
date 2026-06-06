@@ -1,6 +1,5 @@
 import json
 import sys
-import time
 
 import torch
 import torch.nn as nn
@@ -55,8 +54,13 @@ def on_message(ws, message):
     if data.get("type") != "observations":
         raise ValueError(f"Unexpected browser message type: {data.get('type')}")
 
-    tick = data.get("tick", 0)
-    observations = data.get("agents", [])
+    if "tick" not in data:
+        raise ValueError("Observation message is missing tick.")
+    if "agents" not in data:
+        raise ValueError("Observation message is missing agents.")
+
+    tick = data["tick"]
+    observations = data["agents"]
     if not isinstance(observations, list):
         raise ValueError("Observation message is missing agents array.")
 
@@ -72,8 +76,13 @@ def on_message(ws, message):
             raise ValueError(f"Agent {agent_id} observation requires a 16-value state vector.")
 
         agent = agents[agent_id]
-        collided = obs.get("collided", False)
-        agent.score = float(obs.get("score", 0.0))
+        if "collided" not in obs:
+            raise ValueError(f"Agent {agent_id} observation is missing collided.")
+        if "score" not in obs:
+            raise ValueError(f"Agent {agent_id} observation is missing score.")
+
+        collided = obs["collided"]
+        agent.score = float(obs["score"])
 
         if collided:
             if agent.score > agent.best_score:
@@ -130,9 +139,7 @@ def on_error(ws, error):
 
 
 def on_close(ws, close_status_code, close_msg):
-    print("WebSocket connection closed. Reconnecting in 3 seconds...")
-    time.sleep(3)
-    connect_ws()
+    raise RuntimeError(f"WebSocket connection closed: code={close_status_code} message={close_msg}")
 
 
 def on_open(ws):

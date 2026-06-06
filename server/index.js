@@ -21,11 +21,14 @@ const rlBackend = spawn('python3', [path.join(__dirname, '..', 'rl', 'server.py'
   stdio: 'inherit'
 });
 
+function shutdown() {
+  rlBackend.kill('SIGINT');
+  process.exit(0);
+}
+
 rlBackend.on('exit', (code, signal) => {
   throw new Error(`RL backend process exited: code=${code} signal=${signal}`);
 });
 
-process.on('SIGINT', () => {
-  rlBackend.kill('SIGINT');
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
