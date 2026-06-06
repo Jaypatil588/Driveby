@@ -21,14 +21,18 @@ async function main() {
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
   const playerCar = new PlayerCar(scene);
+  playerCar.attachMap(map);
   const cameras = new CameraToggle(map);
 
-  // Single source of truth: everything updates once per rendered frame,
-  // INSIDE the custom layer's render(). This keeps the car position and the
-  // map's projection matrix perfectly in sync → no jitter.
+  // Per frame, in order:
+  //   1) advance car physics (updates lng/lat/heading)
+  //   2) move the MAP camera onto the car (jumpTo)
+  //   3) pin the car mesh to the map centre
+  // Steps 2 & 3 share the same centre, so car + camera are locked together.
   sfLayer.onFrame = (delta) => {
-    playerCar.update(delta, keys);
-    cameras.update(playerCar);
+    playerCar.update(delta, keys);   // step 1 (and a provisional sync)
+    cameras.update(playerCar);       // step 2 — moves map to car's lng/lat
+    playerCar.pinToCentre();         // step 3 — re-pin to the now-updated centre
   };
 
   // Kick off continuous rendering (the layer re-triggers itself thereafter).

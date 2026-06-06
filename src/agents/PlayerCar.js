@@ -99,6 +99,9 @@ export class PlayerCar {
     this._sync();
   }
 
+  // `map` is passed so the car can pin itself to the map centre each frame.
+  attachMap(map) { this.map = map; }
+
   update(delta, keys = {}) {
     const MAX_SPEED = 22, ACCEL = 14, BRAKE = 28, REVERSE = 8, STEER = 2.0;
 
@@ -128,15 +131,17 @@ export class PlayerCar {
     this._sync();
   }
 
-  _sync() {
-    const p = worldToMap(this.lng, this.lat, 0);
+  _sync() { this.pinToCentre(); }
+
+  // Place the car mesh exactly at the map's current centre, facing its heading.
+  pinToCentre() {
+    const c = this.map ? this.map.getCenter() : { lng: this.lng, lat: this.lat };
+    const p = worldToMap(c.lng, c.lat, 0);
     this.group.position.copy(p);
 
-    // Yaw the group so the car's +X (forward) points along travel direction.
-    // Derive the mercator-space angle from a step ahead (handles Y-flip).
     const ahead = worldToMap(
-      this.lng + Math.sin(this.heading) * 1e-5,
-      this.lat + Math.cos(this.heading) * 1e-5, 0
+      c.lng + Math.sin(this.heading) * 1e-5,
+      c.lat + Math.cos(this.heading) * 1e-5, 0
     );
     const yaw = Math.atan2(ahead.y - p.y, ahead.x - p.x);
     this.group.rotation.set(0, 0, yaw);

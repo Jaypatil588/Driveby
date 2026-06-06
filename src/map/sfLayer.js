@@ -53,8 +53,9 @@ class SFLayer {
   }
 
   render(gl, args) {
-    // Run driving + camera update for THIS frame, before reading the matrix,
-    // so position and projection are always consistent (no jitter).
+    // Advance driving for THIS frame. onFrame moves the MAP (not the car in
+    // mercator space), and the car mesh is positioned at the map's current
+    // centre — so the car can never desync from the camera (no jitter).
     if (this.onFrame) {
       const now = performance.now();
       const delta = Math.min((now - this._lastTime) / 1000, 0.05);
@@ -62,10 +63,10 @@ class SFLayer {
       this.onFrame(delta);
     }
 
-    // MapLibre v4 passes a flat array; v5 passes a ProjectionData object
+    // MapLibre v5 passes a ProjectionData object; v4 a flat array.
     const m = Array.isArray(args)
       ? args
-      : (args.defaultProjectionData?.mainMatrix ?? args.projectionData?.mainMatrix ?? args);
+      : (args?.defaultProjectionData?.mainMatrix ?? args?.projectionData?.mainMatrix ?? args);
 
     this.camera.projectionMatrix.fromArray(m);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
