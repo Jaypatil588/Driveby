@@ -53,19 +53,14 @@ class SFLayer {
   }
 
   render(gl, args) {
-    // Run driving + camera update for THIS frame, before reading the matrix,
-    // so position and projection are always consistent (no jitter).
-    if (this.onFrame) {
-      const now = performance.now();
-      const delta = Math.min((now - this._lastTime) / 1000, 0.05);
-      this._lastTime = now;
-      this.onFrame(delta);
-    }
+    // Pin the car mesh to the map centre using THIS frame's matrix so the mesh
+    // and projection stay consistent. Driving + camera happen in the rAF loop.
+    if (this.onFrame) this.onFrame();
 
-    // MapLibre v4 passes a flat array; v5 passes a ProjectionData object
+    // MapLibre v5 passes a ProjectionData object; v4 a flat array.
     const m = Array.isArray(args)
       ? args
-      : (args.defaultProjectionData?.mainMatrix ?? args.projectionData?.mainMatrix ?? args);
+      : (args?.defaultProjectionData?.mainMatrix ?? args?.projectionData?.mainMatrix ?? args);
 
     this.camera.projectionMatrix.fromArray(m);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
@@ -73,7 +68,8 @@ class SFLayer {
     this.renderer.resetState();
     this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
-    this.map.triggerRepaint();
+    // NOTE: repaint is driven by the rAF loop in index.js, not here, so the
+    // camera (jumpTo) and physics run outside the render callback.
   }
 
   // Expose scene so other modules can add objects

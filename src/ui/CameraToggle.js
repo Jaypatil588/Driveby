@@ -32,14 +32,10 @@ export class CameraToggle {
     const s = car.getState();
 
     if (MODES[this.modeIndex] === 'chase') {
-      const bearingDeg = s.heading * 180 / Math.PI;
-      const mPerDegLng = 111320 * Math.cos(s.lat * Math.PI / 180);
-      const aheadLat = s.lat + (Math.cos(s.heading) * CHASE.aheadMetres) / M_PER_DEG_LAT;
-      const aheadLng = s.lng + (Math.sin(s.heading) * CHASE.aheadMetres) / mPerDegLng;
-
+      // Centre exactly on the car (the car pins itself to this same centre).
       this.map.jumpTo({
-        center: [aheadLng, aheadLat],
-        bearing: bearingDeg,
+        center: [s.lng, s.lat],
+        bearing: s.heading * 180 / Math.PI,
         pitch: CHASE.pitch,
         zoom: CHASE.zoom,
       });

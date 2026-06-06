@@ -8,56 +8,44 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-// Builds a car-shaped mesh by extruding a smooth side-profile across the width.
-// In metres, +X = forward, +Z = up. Renders reliably (pure procedural geometry).
+// Clean low-poly sedan from simple boxes. Sleek proportions read well from the
+// chase cam. In metres, +X = forward, +Z = up.
 function buildCarMesh(scale, bodyColor = 0x2266dd) {
   const car = new THREE.Group();
 
-  const paint = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.55, roughness: 0.3 });
-  const tyre  = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, metalness: 0.1, roughness: 0.85 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x182838, metalness: 0.5, roughness: 0.12 });
+  const paint = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.5, roughness: 0.35 });
+  const tyre  = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.1, roughness: 0.9 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x9fd0ee, metalness: 0.3, roughness: 0.1 });
   const light = new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xffdd66, emissiveIntensity: 1.4 });
   const tail  = new THREE.MeshStandardMaterial({ color: 0xff3322, emissive: 0xcc1100, emissiveIntensity: 1.1 });
 
-  const L = 4.4, W = 1.8;
-  const wheelR = 0.40, wheelW = 0.32;
-  const floor = wheelR * 0.6; // body floor sits a bit above wheel centres
+  const L = 4.6, W = 1.9;
+  const wheelR = 0.36, wheelW = 0.28;
 
-  // --- side profile (a classic car silhouette) in the X(length)-Z(height) plane ---
-  const x0 = -L / 2, x1 = L / 2;
-  const shape = new THREE.Shape();
-  shape.moveTo(x0 + 0.1, floor);                 // rear bottom
-  shape.lineTo(x1 - 0.1, floor);                 // front bottom
-  shape.lineTo(x1,        floor + 0.35);         // front bumper
-  shape.lineTo(x1 - 0.05, floor + 0.7);          // hood front
-  shape.lineTo(x1 - 1.25, floor + 0.78);         // hood/base of windshield
-  shape.lineTo(x1 - 1.95, floor + 1.35);         // windshield top (front of roof)
-  shape.lineTo(x0 + 1.55, floor + 1.4);          // roof rear
-  shape.lineTo(x0 + 0.75, floor + 0.82);         // rear window base
-  shape.lineTo(x0 + 0.05, floor + 0.75);         // trunk
-  shape.lineTo(x0,        floor + 0.4);           // rear bumper
-  shape.lineTo(x0 + 0.1,  floor);                 // close
-  shape.closePath();
+  // --- main body: low, long slab (the chassis) ---
+  const chassisH = 0.45;
+  const chassisZ = wheelR + 0.04;
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(L, W, chassisH), paint);
+  chassis.position.set(0, 0, chassisZ + chassisH / 2);
+  car.add(chassis);
 
-  const body = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(shape, { depth: W, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 2 }),
-    paint
-  );
-  // Extrude runs along +Z; rotate so width is along Y, and centre it.
-  body.rotation.x = Math.PI / 2;
-  body.position.y = W / 2;
-  car.add(body);
-
-  // --- greenhouse / windows: a darker slab tucked under the roofline ---
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, W * 0.92, 0.5), glass);
-  cabin.position.set(-0.2, 0, floor + 1.05);
+  // --- cabin: shorter box centred slightly rearward, lower & sleek ---
+  const cabinL = L * 0.42, cabinH = 0.42;
+  const cabinZ = chassisZ + chassisH;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(cabinL, W * 0.88, cabinH), paint);
+  cabin.position.set(-0.25, 0, cabinZ + cabinH / 2);
   car.add(cabin);
 
+  // --- windows: thin glass band wrapping the cabin sides + front/back ---
+  const winBand = new THREE.Mesh(new THREE.BoxGeometry(cabinL * 1.02, W * 0.9, cabinH * 0.6), glass);
+  winBand.position.set(-0.25, 0, cabinZ + cabinH * 0.45);
+  car.add(winBand);
+
   // --- wheels ---
-  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 20);
+  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 18);
   wheelGeo.rotateX(Math.PI / 2);
-  for (const x of [L * 0.3, -L * 0.3]) {
-    for (const y of [W / 2 - 0.05, -(W / 2 - 0.05)]) {
+  for (const x of [L * 0.31, -L * 0.31]) {
+    for (const y of [W / 2 - wheelW * 0.35, -(W / 2 - wheelW * 0.35)]) {
       const w = new THREE.Mesh(wheelGeo, tyre);
       w.position.set(x, y, wheelR);
       car.add(w);
@@ -66,11 +54,11 @@ function buildCarMesh(scale, bodyColor = 0x2266dd) {
 
   // --- head/taillights ---
   for (const y of [W / 2 - 0.3, -(W / 2 - 0.3)]) {
-    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.22), light);
-    hl.position.set(L / 2 - 0.04, y, floor + 0.6);
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.34, 0.18), light);
+    hl.position.set(L / 2 - 0.02, y, chassisZ + chassisH * 0.55);
     car.add(hl);
-    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.2), tail);
-    tl.position.set(-L / 2 + 0.04, y, floor + 0.6);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.16), tail);
+    tl.position.set(-L / 2 + 0.02, y, chassisZ + chassisH * 0.55);
     car.add(tl);
   }
 
@@ -98,6 +86,9 @@ export class PlayerCar {
 
     this._sync();
   }
+
+  // `map` is passed so the car can pin itself to the map centre each frame.
+  attachMap(map) { this.map = map; }
 
   update(delta, keys = {}) {
     const MAX_SPEED = 22, ACCEL = 14, BRAKE = 28, REVERSE = 8, STEER = 2.0;
@@ -128,15 +119,17 @@ export class PlayerCar {
     this._sync();
   }
 
-  _sync() {
-    const p = worldToMap(this.lng, this.lat, 0);
+  _sync() { this.pinToCentre(); }
+
+  // Place the car mesh exactly at the map's current centre, facing its heading.
+  pinToCentre() {
+    const c = this.map ? this.map.getCenter() : { lng: this.lng, lat: this.lat };
+    const p = worldToMap(c.lng, c.lat, 0);
     this.group.position.copy(p);
 
-    // Yaw the group so the car's +X (forward) points along travel direction.
-    // Derive the mercator-space angle from a step ahead (handles Y-flip).
     const ahead = worldToMap(
-      this.lng + Math.sin(this.heading) * 1e-5,
-      this.lat + Math.cos(this.heading) * 1e-5, 0
+      c.lng + Math.sin(this.heading) * 1e-5,
+      c.lat + Math.cos(this.heading) * 1e-5, 0
     );
     const yaw = Math.atan2(ahead.y - p.y, ahead.x - p.x);
     this.group.rotation.set(0, 0, yaw);

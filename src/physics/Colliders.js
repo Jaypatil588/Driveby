@@ -14,6 +14,7 @@ function toMerc(lng, lat) {
 
 export function buildColliders(map, physicsWorld) {
   const m = mercatorScale();
+  window.buildingObstacles = [];
 
   // --- building colliders ---
   const features = map.queryRenderedFeatures({ layers: ['3d-buildings'] });
@@ -45,7 +46,11 @@ export function buildColliders(map, physicsWorld) {
 
     if (halfW < 1e-8 || halfD < 1e-8) continue;
 
-    physicsWorld.addBoxCollider(cx, cy, halfH, halfW, halfH, halfD);
+    window.buildingObstacles.push({ minX, maxX, minY, maxY, cx, cy });
+
+    if (physicsWorld) {
+      physicsWorld.addBoxCollider(cx, cy, halfH, halfW, halfH, halfD);
+    }
   }
 
   // --- four boundary walls so cars can't escape the SF block ---
