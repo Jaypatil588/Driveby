@@ -8,46 +8,65 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-// Builds a clean low-poly car from primitives, sized in metres, +X = forward.
+// Builds a recognizable low-poly car from primitives, in metres, +X = forward.
 function buildCarMesh(scale, bodyColor = 0x2266dd) {
   const car = new THREE.Group();
 
-  const body = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.4, roughness: 0.5 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x111418, metalness: 0.3, roughness: 0.6 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x99c4e0, metalness: 0.6, roughness: 0.2 });
-  const light = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffee88, emissiveIntensity: 0.8 });
+  const paint = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.5, roughness: 0.35 });
+  const tyre  = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, metalness: 0.1, roughness: 0.8 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.4, roughness: 0.15 });
+  const light = new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xffdd66, emissiveIntensity: 1.2 });
+  const tail  = new THREE.MeshStandardMaterial({ color: 0xff3322, emissive: 0xcc1100, emissiveIntensity: 1.0 });
 
-  // dimensions in metres (length along X, width along Y, height along Z)
-  const L = 4.4, W = 1.9, H = 0.8;
+  const L = 4.4, W = 1.85;
+  const wheelR = 0.42, wheelW = 0.3;
+  const groundClear = 0.18;
+  const hullZ = wheelR + groundClear;   // bottom of hull above ground
+  const hullH = 0.55;                    // lower hull height
 
-  // lower body
-  const lower = new THREE.Mesh(new THREE.BoxGeometry(L, W, H), body);
-  lower.position.z = H / 2 + 0.35; // sit on wheels
-  car.add(lower);
-
-  // cabin
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(L * 0.5, W * 0.85, H * 0.9), glass);
-  cabin.position.set(-0.2, 0, H + 0.45);
-  car.add(cabin);
-
-  // wheels (cylinders along Y axis)
-  const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.35, 16);
-  wheelGeo.rotateX(Math.PI / 2); // align cylinder axis to Y (width)
-  const offsets = [
-    [ L * 0.32,  W / 2 - 0.05], [ L * 0.32, -W / 2 + 0.05],
-    [-L * 0.32,  W / 2 - 0.05], [-L * 0.32, -W / 2 + 0.05],
-  ];
-  for (const [x, y] of offsets) {
-    const wheel = new THREE.Mesh(wheelGeo, dark);
-    wheel.position.set(x, y, 0.45);
-    car.add(wheel);
+  // ---- wheels first (tucked under, partly inside wheel wells) ----
+  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 18);
+  wheelGeo.rotateX(Math.PI / 2);
+  for (const x of [L * 0.31, -L * 0.31]) {
+    for (const y of [W / 2 - wheelW * 0.4, -(W / 2 - wheelW * 0.4)]) {
+      const w = new THREE.Mesh(wheelGeo, tyre);
+      w.position.set(x, y, wheelR);
+      car.add(w);
+    }
   }
 
-  // headlights (front = +X)
-  for (const y of [W / 2 - 0.35, -W / 2 + 0.35]) {
-    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.3), light);
-    hl.position.set(L / 2 - 0.05, y, H / 2 + 0.4);
+  // ---- lower hull (slightly narrower than track so wheels show) ----
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(L, W * 0.92, hullH), paint);
+  hull.position.set(0, 0, hullZ + hullH / 2);
+  car.add(hull);
+
+  // ---- hood + trunk taper: a thin top deck over front and rear ----
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(L * 0.98, W * 0.82, 0.18), paint);
+  deck.position.set(0, 0, hullZ + hullH + 0.05);
+  car.add(deck);
+
+  // ---- cabin: sits in the middle, narrower + sloped feel via smaller box ----
+  const cabinL = L * 0.46;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(cabinL, W * 0.78, 0.5), paint);
+  cabin.position.set(-0.15, 0, hullZ + hullH + 0.35);
+  car.add(cabin);
+
+  // greenhouse (glass) wrapping the cabin
+  const green = new THREE.Mesh(new THREE.BoxGeometry(cabinL * 0.96, W * 0.8, 0.42), glass);
+  green.position.set(-0.15, 0, hullZ + hullH + 0.4);
+  car.add(green);
+
+  // ---- headlights (front +X) ----
+  for (const y of [W / 2 - 0.32, -(W / 2 - 0.32)]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.32, 0.2), light);
+    hl.position.set(L / 2 - 0.02, y, hullZ + hullH * 0.6);
     car.add(hl);
+  }
+  // ---- taillights (rear -X) ----
+  for (const y of [W / 2 - 0.32, -(W / 2 - 0.32)]) {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.18), tail);
+    tl.position.set(-L / 2 + 0.02, y, hullZ + hullH * 0.6);
+    car.add(tl);
   }
 
   car.scale.setScalar(scale);
