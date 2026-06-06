@@ -24,18 +24,61 @@ async function main() {
   playerCar.attachMap(map);
   const cameras = new CameraToggle(map);
 
-  // Per frame, in order:
-  //   1) advance car physics (updates lng/lat/heading)
-  //   2) move the MAP camera onto the car (jumpTo)
-  //   3) pin the car mesh to the map centre
-  // Steps 2 & 3 share the same centre, so car + camera are locked together.
+  // --- live debug overlay ---
+  const dbg = document.createElement('div');
+  dbg.style.cssText =
+    'position:absolute;top:8px;left:8px;z-index:99;background:rgba(0,0,0,.8);' +
+    'color:#0f0;font:11px monospace;padding:8px;white-space:pre;line-height:1.5;' +
+    'pointer-events:none;border-radius:4px;max-width:46ch;';
+  document.body.appendChild(dbg);
+
+  let frames = 0, fpsAccum = 0, fps = 0;
+  let lastCarLng = playerCar.lng, lastCarLat = playerCar.lat;
+
   sfLayer.onFrame = (delta) => {
-    playerCar.update(delta, keys);   // step 1 (and a provisional sync)
-    cameras.update(playerCar);       // step 2 — moves map to car's lng/lat
-    playerCar.pinToCentre();         // step 3 — re-pin to the now-updated centre
+    // step 1: physics
+    playerCar.update(delta, keys);
+    const sBefore = playerCar.getState();
+    const carMoveM = Math.hypot(
+      (sBefore.lng - lastCarLng) * 111320 * Math.cos(sBefore.lat * Math.PI / 180),
+      (sBefore.lat - lastCarLat) * 111320
+    );
+    lastCarLng = sBefore.lng; lastCarLat = sBefore.lat;
+
+    // step 2: camera follows
+    cameras.update(playerCar);
+    const center = map.getCenter();
+
+    // step 3: pin
+    playerCar.pinToCentre();
+
+    // how far is the map centre from the car? (should be ~0 if locked)
+    const centerErrM = Math.hypot(
+      (center.lng - sBefore.lng) * 111320 * Math.cos(sBefore.lat * Math.PI / 180),
+      (center.lat - sBefore.lat) * 111320
+    );
+
+    // fps
+    frames++; fpsAccum += delta;
+    if (fpsAccum >= 0.5) { fps = Math.round(frames / fpsAccum); frames = 0; fpsAccum = 0; }
+
+    const heldKeys = Object.keys(keys).filter(k => keys[k]).join(',') || '(none)';
+    dbg.textContent =
+      `fps:        ${fps}\n` +
+      `delta(ms):  ${(delta * 1000).toFixed(1)}\n` +
+      `keys:       ${heldKeys}\n` +
+      `speed(m/s): ${sBefore.speed.toFixed(2)}\n` +
+      `heading:    ${(sBefore.heading * 180 / Math.PI).toFixed(1)}°\n` +
+      `car move/f: ${carMoveM.toFixed(3)} m\n` +
+      `lng,lat:    ${sBefore.lng.toFixed(6)}, ${sBefore.lat.toFixed(6)}\n` +
+      `centerErr:  ${centerErrM.toFixed(4)} m  ${centerErrM > 0.5 ? '<< DESYNC' : 'ok'}\n` +
+      `bearing:    ${map.getBearing().toFixed(1)}°  pitch:${map.getPitch().toFixed(0)}  zoom:${map.getZoom().toFixed(2)}`;
   };
 
-  // Kick off continuous rendering (the layer re-triggers itself thereafter).
+  // expose for console poking
+  window.car = playerCar;
+  window.map = map;
+
   map.triggerRepaint();
 }
 
