@@ -56,6 +56,9 @@ class SFLayer {
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
 
     this.renderer.resetState();
+    // Clear only the DEPTH buffer so our objects aren't clipped/torn by the
+    // depth values MapLibre left from drawing its 3D buildings + terrain.
+    this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
     this.map.triggerRepaint();
   }

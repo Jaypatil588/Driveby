@@ -9,7 +9,7 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-const CAR_LENGTH_M = 5; // target real-world length of the model
+const CAR_LENGTH_M = 12; // slightly oversized so it reads clearly on the map
 
 export class PlayerCar {
   constructor(scene) {
@@ -34,39 +34,37 @@ export class PlayerCar {
     loader.load('assets/models/car/truck.glb', (gltf) => {
       const model = gltf.scene;
 
-      // --- normalise the model into a 1-unit-up, forward-facing local frame ---
-      // 1) measure its bounding box
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-
-      // 2) recentre to origin, sit on ground (z=0 base)
-      model.position.sub(center);
-      model.position.z += size.z / 2; // (after the upright tilt, see below)
-
-      // Kenney models are Y-up, facing -Z. Stand them up into our Z-up world.
+      // Wrapper handles: Y-up(model) → Z-up(world) tilt, scale, ground offset.
       const wrapper = new THREE.Group();
-      wrapper.add(model);
-      wrapper.rotation.x = Math.PI / 2; // Y-up → Z-up
+      wrapper.rotation.x = Math.PI / 2;
 
-      // 3) scale so the longest horizontal axis ≈ CAR_LENGTH_M in mercator units
-      const longest = Math.max(size.x, size.z); // x or z is the length
-      const targetMerc = CAR_LENGTH_M * mercatorScale();
-      const scale = targetMerc / longest;
+      // Measure the raw model (in its own Y-up space).
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3(); box.getSize(size);
+      const center = new THREE.Vector3(); box.getCenter(center);
+
+      // Recentre on X/Z, drop so the wheels sit at y=0 (model bottom → origin).
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= box.min.y;
+
+      // Scale: model's longest horizontal extent → CAR_LENGTH_M (in mercator units).
+      const longest = Math.max(size.x, size.z);
+      const scale = (CAR_LENGTH_M * mercatorScale()) / longest;
       wrapper.scale.setScalar(scale);
 
-      // brighten materials a touch so it reads in daylight
+      // Daylight-friendly materials.
       model.traverse((o) => {
         if (o.isMesh && o.material) {
-          o.material.metalness = Math.min(o.material.metalness ?? 0.3, 0.4);
-          o.material.roughness = 0.5;
+          o.material.metalness = 0.3;
+          o.material.roughness = 0.55;
+          o.material.depthTest = true;
+          o.material.depthWrite = true;
         }
       });
 
+      wrapper.add(model);
       this.group.add(wrapper);
-      this._modelReady = true;
       this._sync();
     });
   }
