@@ -2,6 +2,7 @@ import { initMap } from './map/mapbox.js';
 import { sfLayer } from './map/sfLayer.js';
 import { PlayerCar } from './agents/PlayerCar.js';
 import { CameraToggle } from './ui/CameraToggle.js';
+import { Environment } from './map/Environment.js';
 
 async function main() {
   const map = await initMap();
@@ -21,6 +22,11 @@ async function main() {
   const playerCar = new PlayerCar(scene);
   playerCar.attachMap(map);
   const cameras = new CameraToggle(map);
+
+  // Environment (street lights, footpaths, trees, pedestrians). Built once the
+  // road tiles are loaded so queryRenderedFeatures returns real geometry.
+  const env = new Environment(map, scene);
+  map.once('idle', () => env.build());
 
   // --- debug overlay ---
   const dbg = document.createElement('div');
@@ -46,6 +52,7 @@ async function main() {
 
     playerCar.update(delta, keys);  // advance physics
     cameras.update(playerCar);      // move map camera (works here)
+    env.update(delta);              // animate pedestrians
 
     const s = playerCar.getState();
     const c = map.getCenter();
