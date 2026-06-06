@@ -6,127 +6,114 @@ import { worldToMap, mercatorScale } from '../map/sfLayer.js';
 const START_LNG = -122.3988;
 const START_LAT  = 37.7916;
 
-// Metres-per-degree at SF latitude
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-// Car model is ~7 units long; a real car ~4.5m
 function carScale() {
-  return (4.5 * mercatorScale()) / 7;
+  return (4.5 * mercatorScale()) / 7; // model ~7 units → ~4.5 m
 }
-
-const _Z = new THREE.Vector3(0, 0, 1);
 
 export class PlayerCar {
   constructor(scene) {
     this.scene = scene;
 
-    // heading = compass bearing in RADIANS: 0 = North, +clockwise (so π/2 = East).
-    // This matches MapLibre's bearing (degrees clockwise from north) exactly.
+    // heading = compass bearing in radians (0 = N, +clockwise → π/2 = E)
     this.lng = START_LNG;
     this.lat = START_LAT;
     this.heading = 0;
-    this.speed = 0; // metres / second (signed: + forward, - reverse)
+    this.speed = 0; // m/s, signed
 
-    this.mesh = null;
-    this.windowsMesh = null;
-    // Fine-tunes which way the model's nose points. There are 4 right angles;
-    // if the car drives sideways/backward, this is the single knob to turn
-    // (try 0, π/2, π, -π/2). Default chosen for the spinner model's +X length axis.
-    this._modelYawOffset = Math.PI / 2;
+    // Group holds the world position + driving yaw.
+    // The model child holds the fixed "stand upright + face forward" transform,
+    // so the two rotations never interfere (this is what fixes the deformation).
+    this.group = new THREE.Group();
+    this.scene.add(this.group);
+
     this._load();
   }
 
   _load() {
     const scale = carScale();
-    const matBody = new THREE.MeshPhongMaterial({
-      color: 0x33ccff, emissive: 0x0a2a44, shininess: 140,
+    const matBody = new THREE.MeshStandardMaterial({
+      color: 0x2299ff, metalness: 0.6, roughness: 0.35, emissive: 0x062138,
     });
-    const matWin = new THREE.MeshPhongMaterial({
-      color: 0xaaddff, transparent: true, opacity: 0.55, shininess: 220,
+    const matWin = new THREE.MeshStandardMaterial({
+      color: 0x99ddff, metalness: 0.9, roughness: 0.1,
+      transparent: true, opacity: 0.5,
     });
 
     const loader = new OBJLoader();
     loader.load('assets/models/spinner.obj', (obj) => {
-      this.mesh = obj.children[0];
-      this.mesh.material = matBody;
-      this.mesh.scale.setScalar(scale);
-      this.scene.add(this.mesh);
-      this._syncMesh();
+      const mesh = obj.children[0];
+      mesh.material = matBody;
+      mesh.geometry.computeVertexNormals();
+      this._fitModel(mesh, scale);
+      this.group.add(mesh);
     });
     loader.load('assets/models/spinner_windows.obj', (obj) => {
-      this.windowsMesh = obj.children[0];
-      this.windowsMesh.material = matWin;
-      this.windowsMesh.scale.setScalar(scale);
-      this.scene.add(this.windowsMesh);
-      this._syncMesh();
+      const mesh = obj.children[0];
+      mesh.material = matWin;
+      this._fitModel(mesh, scale);
+      this.group.add(mesh);
     });
   }
 
+  // Apply the fixed model-space correction: scale, stand upright (Y-up → Z-up),
+  // and rotate so the nose points along the group's local +Y (forward).
+  _fitModel(mesh, scale) {
+    mesh.scale.setScalar(scale);
+    // Tilt the Y-up model to be Z-up.
+    mesh.rotation.x = Math.PI / 2;
+    // The model's length runs along local X; after the tilt, rotate about Z so
+    // the nose aligns with the group's forward axis. Flip via _modelYawOffset.
+    mesh.rotateZ(this._modelYawOffset ?? -Math.PI / 2);
+    // Lift slightly so wheels sit on the road, not through it.
+    mesh.position.z = scale * 1.3;
+  }
+
+  // Knob: if the car drives sideways/backward, set to 0, π/2, π, or -π/2.
+  get _modelYawOffset() { return -Math.PI / 2; }
+
   update(delta, keys = {}) {
-    const MAX_SPEED = 22;   // m/s ≈ 80 km/h
-    const ACCEL     = 14;
-    const BRAKE     = 28;
-    const REVERSE   = 8;
-    const STEER     = 2.0;  // rad/s at full speed
+    const MAX_SPEED = 22, ACCEL = 14, BRAKE = 28, REVERSE = 8, STEER = 2.0;
 
     const throttle  = (keys['w'] || keys['ArrowUp'])    ? 1 : 0;
     const braking   = (keys['s'] || keys['ArrowDown'])  ? 1 : 0;
     const turnLeft  = (keys['a'] || keys['ArrowLeft'])  ? 1 : 0;
     const turnRight = (keys['d'] || keys['ArrowRight']) ? 1 : 0;
 
-    // ---- longitudinal ----
-    if (throttle) {
-      this.speed += ACCEL * delta;
-    } else if (braking) {
-      this.speed -= BRAKE * delta;
-    } else {
+    if (throttle)      this.speed += ACCEL * delta;
+    else if (braking)  this.speed -= BRAKE * delta;
+    else {
       this.speed -= Math.sign(this.speed) * 10 * delta;
       if (Math.abs(this.speed) < 0.2) this.speed = 0;
     }
     this.speed = THREE.MathUtils.clamp(this.speed, -REVERSE, MAX_SPEED);
 
-    // ---- steering ----
-    // D (right) increases bearing (clockwise), A (left) decreases it.
-    // Reverse the sense when driving backward, like a real car.
     if (Math.abs(this.speed) > 0.1) {
-      const steer = turnRight - turnLeft; // +1 right, -1 left
+      const steer = turnRight - turnLeft;
       const ratio = Math.min(Math.abs(this.speed) / MAX_SPEED + 0.3, 1);
       this.heading += steer * STEER * ratio * delta * Math.sign(this.speed);
     }
 
-    // ---- integrate position along heading ----
-    // bearing: 0=N (+lat), 90°=E (+lng). dNorth=cos(h), dEast=sin(h).
     const distM = this.speed * delta;
     this.lat += (Math.cos(this.heading) * distM) / M_PER_DEG_LAT;
     this.lng += (Math.sin(this.heading) * distM) / M_PER_DEG_LNG;
 
-    this._syncMesh();
+    this._sync();
   }
 
-  _syncMesh() {
-    if (!this.mesh) return;
+  _sync() {
     const p = worldToMap(this.lng, this.lat, 0);
-
-    // Derive the forward direction in MERCATOR space directly from the heading,
-    // so the model always faces exactly where it travels (handles the mercator
-    // Y-flip automatically). A small step ahead in lng/lat → mercator delta.
-    const aheadLat = this.lat + Math.cos(this.heading) * 1e-5;
-    const aheadLng = this.lng + Math.sin(this.heading) * 1e-5;
-    const pAhead = worldToMap(aheadLng, aheadLat, 0);
-    // mercator-space yaw of the travel vector (atan2 of the planar delta)
-    const mercYaw = Math.atan2(pAhead.y - p.y, pAhead.x - p.x);
-
-    // Tilt Y-up model upright into Z-up world, then yaw to the travel direction.
-    const e = new THREE.Euler(Math.PI / 2, 0, mercYaw + this._modelYawOffset, 'ZXY');
-    const q = new THREE.Quaternion().setFromEuler(e);
-
-    this.mesh.position.copy(p);
-    this.mesh.quaternion.copy(q);
-    if (this.windowsMesh) {
-      this.windowsMesh.position.copy(p);
-      this.windowsMesh.quaternion.copy(q);
-    }
+    this.group.position.copy(p);
+    // Yaw the whole group to face the heading, in mercator space.
+    // mercator Y is flipped vs north, so derive yaw from a step ahead.
+    const ahead = worldToMap(
+      this.lng + Math.sin(this.heading) * 1e-5,
+      this.lat + Math.cos(this.heading) * 1e-5, 0
+    );
+    const yaw = Math.atan2(ahead.y - p.y, ahead.x - p.x);
+    this.group.rotation.set(0, 0, yaw);
   }
 
   getState() {

@@ -1,10 +1,11 @@
 const MODES = ['chase', 'birds-eye'];
 
-// Close 3rd-person chase cam
+// Close 3rd-person chase cam.
+// Lower pitch = look more level down the street (buildings stop blocking the car).
 const CHASE = {
-  zoom: 19,
-  pitch: 67,        // steep, looking down the road ahead
-  aheadMetres: 18,  // shift map centre ahead of car → car sits in lower third
+  zoom: 19.5,       // close
+  pitch: 50,        // moderate — avoids looking through buildings ahead
+  aheadMetres: 8,   // small offset so car sits just below centre
 };
 const BIRDS_EYE = { zoom: 16.5, pitch: 0 };
 
@@ -13,7 +14,7 @@ const M_PER_DEG_LAT = 111320;
 export class CameraToggle {
   constructor(map) {
     this.map = map;
-    this.modeIndex = 0; // start in chase
+    this.modeIndex = 0;
     this._label = document.getElementById('cam-label');
 
     window.addEventListener('keydown', (e) => {
@@ -32,9 +33,6 @@ export class CameraToggle {
 
     if (MODES[this.modeIndex] === 'chase') {
       const bearingDeg = s.heading * 180 / Math.PI;
-
-      // Place the map centre a few metres AHEAD of the car along its heading,
-      // so the car renders in the lower portion of the screen (chase view).
       const mPerDegLng = 111320 * Math.cos(s.lat * Math.PI / 180);
       const aheadLat = s.lat + (Math.cos(s.heading) * CHASE.aheadMetres) / M_PER_DEG_LAT;
       const aheadLng = s.lng + (Math.sin(s.heading) * CHASE.aheadMetres) / mPerDegLng;
