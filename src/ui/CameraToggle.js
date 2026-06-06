@@ -1,16 +1,12 @@
-import maplibregl from 'maplibre-gl';
+const MODES = ['follow', 'birds-eye'];
 
-const MODES = ['birds-eye', 'follow'];
-
-// Bird's eye map settings
-const BIRDS_EYE = { pitch: 45, zoom: 16, bearing: 0 };
-// Follow cam offsets (applied relative to car heading)
-const FOLLOW = { pitch: 60, zoom: 18 };
+const FOLLOW    = { zoom: 18.5, pitch: 55 };
+const BIRDS_EYE = { zoom: 16.5, pitch: 0 };
 
 export class CameraToggle {
   constructor(map) {
     this.map = map;
-    this.modeIndex = 0;
+    this.modeIndex = 0; // start in follow so driving reads clearly
     this._label = document.getElementById('cam-label');
 
     window.addEventListener('keydown', (e) => {
@@ -22,35 +18,37 @@ export class CameraToggle {
 
   toggle() {
     this.modeIndex = (this.modeIndex + 1) % MODES.length;
-    if (this.modeIndex === 0) {
-      // snap back to birds eye
-      this.map.easeTo({ pitch: BIRDS_EYE.pitch, zoom: BIRDS_EYE.zoom, bearing: BIRDS_EYE.bearing, duration: 600 });
-    }
     this._updateLabel();
   }
 
-  // Call each frame with the player car
+  // Called every frame with the player car
   update(car) {
-    if (this.modeIndex !== 1 || !car) return;
+    const s = car.getState();
+    const mode = MODES[this.modeIndex];
 
-    // Convert heading (radians, clockwise from north) to MapLibre bearing (degrees, clockwise from north)
-    const bearingDeg = (car.heading * 180 / Math.PI) % 360;
-
-    // Re-centre map on car's lng/lat each frame in follow mode
-    // We need lng/lat back from mercator pos
-    const mc = new maplibregl.MercatorCoordinate(car.pos.x, car.pos.y, car.pos.z);
-    const lngLat = mc.toLngLat();
-
-    this.map.jumpTo({
-      center: [lngLat.lng, lngLat.lat],
-      bearing: bearingDeg,
-      pitch: FOLLOW.pitch,
-      zoom: FOLLOW.zoom,
-    });
+    if (mode === 'follow') {
+      // GPS-style: car stays centred, pointing up; world rotates beneath it
+      const bearingDeg = s.heading * 180 / Math.PI;
+      this.map.jumpTo({
+        center: [s.lng, s.lat],
+        bearing: bearingDeg,
+        pitch: FOLLOW.pitch,
+        zoom: FOLLOW.zoom,
+      });
+    } else {
+      // Bird's-eye: follow position, north-up, no rotation
+      this.map.jumpTo({
+        center: [s.lng, s.lat],
+        bearing: 0,
+        pitch: BIRDS_EYE.pitch,
+        zoom: BIRDS_EYE.zoom,
+      });
+    }
   }
 
   _updateLabel() {
     if (!this._label) return;
-    this._label.textContent = this.modeIndex === 0 ? "[C] Bird's Eye" : '[C] Follow Cam';
+    this._label.textContent =
+      MODES[this.modeIndex] === 'follow' ? '[C] Follow Cam' : "[C] Bird's Eye";
   }
 }
