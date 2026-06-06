@@ -28,6 +28,14 @@ module Backend
     # Common ones are `templates`, `generators`, or `middleware`, for example.
     config.autoload_lib(ignore: %w[assets tasks])
 
+    # Serve the MapLibre/Three.js frontend from the repo root (parent of backend/).
+    require_relative "../lib/driveby/repo_static"
+    config.middleware.insert_before(
+      ActionDispatch::Static,
+      Driveby::RepoStatic,
+      root: root.join("..").expand_path
+    )
+
     # Don't generate system test files.
     config.generators.system_tests = nil
   end
