@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { worldToMap, mercatorScale } from '../map/sfLayer.js';
 
 // Start: Market St & 1st St
@@ -9,64 +8,71 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-const CAR_LENGTH_M = 12; // slightly oversized so it reads clearly on the map
+// Builds a clean low-poly car from primitives, sized in metres, +X = forward.
+function buildCarMesh(scale, bodyColor = 0x2266dd) {
+  const car = new THREE.Group();
+
+  const body = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.4, roughness: 0.5 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x111418, metalness: 0.3, roughness: 0.6 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x99c4e0, metalness: 0.6, roughness: 0.2 });
+  const light = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffee88, emissiveIntensity: 0.8 });
+
+  // dimensions in metres (length along X, width along Y, height along Z)
+  const L = 4.4, W = 1.9, H = 0.8;
+
+  // lower body
+  const lower = new THREE.Mesh(new THREE.BoxGeometry(L, W, H), body);
+  lower.position.z = H / 2 + 0.35; // sit on wheels
+  car.add(lower);
+
+  // cabin
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(L * 0.5, W * 0.85, H * 0.9), glass);
+  cabin.position.set(-0.2, 0, H + 0.45);
+  car.add(cabin);
+
+  // wheels (cylinders along Y axis)
+  const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.35, 16);
+  wheelGeo.rotateX(Math.PI / 2); // align cylinder axis to Y (width)
+  const offsets = [
+    [ L * 0.32,  W / 2 - 0.05], [ L * 0.32, -W / 2 + 0.05],
+    [-L * 0.32,  W / 2 - 0.05], [-L * 0.32, -W / 2 + 0.05],
+  ];
+  for (const [x, y] of offsets) {
+    const wheel = new THREE.Mesh(wheelGeo, dark);
+    wheel.position.set(x, y, 0.45);
+    car.add(wheel);
+  }
+
+  // headlights (front = +X)
+  for (const y of [W / 2 - 0.35, -W / 2 + 0.35]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.3), light);
+    hl.position.set(L / 2 - 0.05, y, H / 2 + 0.4);
+    car.add(hl);
+  }
+
+  car.scale.setScalar(scale);
+  return car;
+}
 
 export class PlayerCar {
   constructor(scene) {
     this.scene = scene;
 
-    // heading = compass bearing in radians (0 = N, +clockwise → π/2 = E)
     this.lng = START_LNG;
     this.lat = START_LAT;
-    this.heading = 0;
-    this.speed = 0; // m/s, signed
+    this.heading = 0;       // compass bearing, radians (0=N, +cw)
+    this.speed = 0;         // m/s, signed
 
-    // Outer group: world position + driving yaw.
-    // Inner model: fixed scale + upright/forward correction.
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
-    this._load();
-  }
+    // primitives authored in metres → scale by mercator-units-per-metre.
+    // 2.5× oversize so the car reads clearly against the buildings.
+    const m = mercatorScale() * 2.5;
+    this.car = buildCarMesh(m, 0x2266dd);
+    this.group.add(this.car);
 
-  _load() {
-    const loader = new GLTFLoader();
-    loader.load('assets/models/car/truck.glb', (gltf) => {
-      const model = gltf.scene;
-
-      // Wrapper handles: Y-up(model) → Z-up(world) tilt, scale, ground offset.
-      const wrapper = new THREE.Group();
-      wrapper.rotation.x = Math.PI / 2;
-
-      // Measure the raw model (in its own Y-up space).
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3(); box.getSize(size);
-      const center = new THREE.Vector3(); box.getCenter(center);
-
-      // Recentre on X/Z, drop so the wheels sit at y=0 (model bottom → origin).
-      model.position.x -= center.x;
-      model.position.z -= center.z;
-      model.position.y -= box.min.y;
-
-      // Scale: model's longest horizontal extent → CAR_LENGTH_M (in mercator units).
-      const longest = Math.max(size.x, size.z);
-      const scale = (CAR_LENGTH_M * mercatorScale()) / longest;
-      wrapper.scale.setScalar(scale);
-
-      // Daylight-friendly materials.
-      model.traverse((o) => {
-        if (o.isMesh && o.material) {
-          o.material.metalness = 0.3;
-          o.material.roughness = 0.55;
-          o.material.depthTest = true;
-          o.material.depthWrite = true;
-        }
-      });
-
-      wrapper.add(model);
-      this.group.add(wrapper);
-      this._sync();
-    });
+    this._sync();
   }
 
   update(delta, keys = {}) {
@@ -102,18 +108,15 @@ export class PlayerCar {
     const p = worldToMap(this.lng, this.lat, 0);
     this.group.position.copy(p);
 
-    // Derive yaw in mercator space (Y is flipped vs north) from a step ahead.
+    // Yaw the group so the car's +X (forward) points along travel direction.
+    // Derive the mercator-space angle from a step ahead (handles Y-flip).
     const ahead = worldToMap(
       this.lng + Math.sin(this.heading) * 1e-5,
       this.lat + Math.cos(this.heading) * 1e-5, 0
     );
     const yaw = Math.atan2(ahead.y - p.y, ahead.x - p.x);
-    // +HALF_PI aligns the model's forward (-Z → after tilt) with travel.
-    this.group.rotation.set(0, 0, yaw + this._yawOffset);
+    this.group.rotation.set(0, 0, yaw);
   }
-
-  // Knob if the truck faces the wrong way: try 0, π/2, π, -π/2.
-  get _yawOffset() { return -Math.PI / 2; }
 
   getState() {
     return { lng: this.lng, lat: this.lat, heading: this.heading, speed: this.speed };
