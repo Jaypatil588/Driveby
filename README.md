@@ -1,40 +1,129 @@
-# SynthCity - An Infinite Procedural Cyberpunk City
+# DriveBy — SF Multi-Agent RL Driving Environment
 
-SynthCity is an interactive WebGL experience built with [Three.js](https://threejs.org/). Sit back and relax while autopilot takes you for a ride, take the wheel and drive, or explore the endless world in freeroam mode - all while enjoying a curated synthwave playlist.
+A browser-based reinforcement learning environment set in real San Francisco downtown. Up to 100 autonomous car agents drive simultaneously through the SF Financial District, each trainable to drive like a Waymo. A human player can take control at any time using WASD keys.
 
-![Screenshot](https://jeff-beene.com/synthcity/screenshots/readme.jpg)
+Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Beene — the Three.js renderer setup and Bladerunner Sedan car model are derived from that project.
 
-## Setup
+---
 
-- Requirements: [node.js](https://nodejs.org/en) and [webpack.js](https://webpack.js.org/). Try to use the latest versions of both.
-- Pull the repo
-- Run `npm install` to install dependencies
-- Setup your local server if you don't already have one. For Node, you can use [http-server](https://www.npmjs.com/package/http-server)
-- Run the local server in the root directory of the repo `http-server`.
-- Enjoy!
+## Tech Stack
 
-## Modifications
+| Layer | Technology |
+|---|---|
+| Map & 3D buildings | MapLibre GL JS (free, no API key) |
+| 3D agents & scene | Three.js (custom MapLibre layer) |
+| Physics & collision | Rapier.js (WASM, runs in browser) |
+| Web server | Node.js + Express |
+| Real-time comms | WebSocket |
+| RL backend (optional) | Python — FastAPI + Ray RLlib |
 
-- When making modifications to `src`, run `npm run build`
-- Update `index.html` to include the appropriate `main.[hash].js` file
+---
+
+## How to Run
+
+### Requirements
+
+- [Node.js](https://nodejs.org/en) v18+
+- npm (comes with Node)
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Build the frontend
+
+```bash
+npm run build
+```
+
+For live rebuilding during development:
+
+```bash
+npm run dev
+```
+
+### 3. Start the server
+
+```bash
+node server/index.js
+```
+
+Then open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Controls
+
+| Key | Action |
+|---|---|
+| `W` / `Arrow Up` | Accelerate |
+| `S` / `Arrow Down` | Brake / reverse |
+| `A` / `Arrow Left` | Steer left |
+| `D` / `Arrow Right` | Steer right |
+| `C` | Toggle bird's eye / follow camera |
+
+---
+
+## Project Structure
+
+```
+/
+├── src/
+│   ├── index.js              — app bootstrap
+│   ├── map/
+│   │   ├── mapbox.js         — MapLibre GL JS init, SF downtown view
+│   │   └── sfLayer.js        — Three.js custom layer injected into MapLibre
+│   ├── agents/
+│   │   ├── PlayerCar.js      — human-controlled car (WASD)
+│   │   ├── CarAgent.js       — single AI agent
+│   │   ├── AgentManager.js   — spawns and updates all 100 agents
+│   │   └── SensorCamera.js   — WebGLRenderTarget front/back/side cameras
+│   ├── physics/
+│   │   ├── PhysicsWorld.js   — Rapier.js world
+│   │   └── Colliders.js      — building + boundary colliders from map data
+│   ├── network/
+│   │   └── AgentSocket.js    — WebSocket client (observations out, actions in)
+│   └── ui/
+│       └── CameraToggle.js   — bird's eye and follow camera manager
+└── server/
+    ├── index.js              — Express static server (port 3000)
+    └── wsRelay.js            — WebSocket relay to Python RL backend (port 3001)
+```
+
+---
+
+## Connecting the RL Backend (optional)
+
+The browser falls back to rule-based driving if no RL backend is connected. To connect a Python backend:
+
+1. Start the Node server (`node server/index.js`)
+2. Connect your Python client to `ws://localhost:3001?type=rl_backend`
+3. Receive observation JSON, send back action JSON per the message format below
+
+**Observation (browser → backend):**
+```json
+{
+  "type": "observations",
+  "tick": 1234,
+  "agents": [{ "id": 0, "x": 0.512, "y": 0.734, "heading": 1.2, "speed": 0.0003 }]
+}
+```
+
+**Action (backend → browser):**
+```json
+{
+  "type": "actions",
+  "tick": 1234,
+  "agents": [{ "id": 0, "throttle": 0.8, "steering": -0.2, "brake": 0.0 }]
+}
+```
+
+---
 
 ## Credits
 
-- Bladerunner Sedan 3d Model - Quaz30 [sketchfab.com/quaz30](sketchfab.com/quaz30)
-- Sound FX - Various contributors on [freesound.org](https://freesound.org)
-- Music from [#Uppbeat](https://uppbeat.io/) (free for Creators!)
-  - prigida [uppbeat.io/browse/artist/prigida](https://uppbeat.io/browse/artist/prigida)
-  - pecanpie> [uppbeat.io/browse/artist/pecan-pie](https://uppbeat.io/browse/artist/pecan-pie)
-  - mountaineer [uppbeat.io/browse/artist/mountaineer](https://uppbeat.io/browse/artist/mountaineer)
-  - d0d [uppbeat.io/browse/artist/d0d](https://uppbeat.io/browse/artist/d0d)
-  - fass [uppbeat.io/browse/artist/fass](https://uppbeat.io/browse/artist/fass)
-  - tatami [uppbeat.io/browse/artist/tatami](https://uppbeat.io/browse/artist/tatami)
-  - kaleidoscope [uppbeat.io/browse/artist/kaleidoscope](https://uppbeat.io/browse/artist/kaleidoscope)
-  - noisecake> [uppbeat.io/browse/artist/noise-cake](https://uppbeat.io/browse/artist/noise-cake)
-  - moodmaze> [uppbeat.io/browse/artist/mood-maze](https://uppbeat.io/browse/artist/mood-maze)
-  - bosnow [uppbeat.io/browse/artist/bosnow](https://uppbeat.io/browse/artist/bosnow)
-  - tecnosine [uppbeat.io/browse/artist/tecnosine](https://uppbeat.io/browse/artist/tecnosine)
-
-## Want to support projects like this?
-
-:coffee: [Buy me a coffee](https://www.paypal.com/donate/?business=DV5PFYEPQ59W4&no_recurring=0&item_name=Want+to+support+my+side-projects+or+buy+me+a+coffee?+Feel+free+to+leave+a+donation+below%21&currency_code=USD)
+- [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Beene — base Three.js renderer and Bladerunner Sedan model
+- Bladerunner Sedan 3D model — Quaz30 ([sketchfab.com/quaz30](https://sketchfab.com/quaz30))
+- Map tiles — [OpenFreeMap](https://openfreemap.org/) (free, no API key required)
