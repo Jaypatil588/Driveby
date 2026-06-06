@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { worldToMap, mercatorScale } from '../map/sfLayer.js';
 
 // Start: Market St & 1st St
@@ -9,9 +9,7 @@ const START_LAT  = 37.7916;
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LNG = 111320 * Math.cos(START_LAT * Math.PI / 180);
 
-function carScale() {
-  return (4.5 * mercatorScale()) / 7; // model ~7 units → ~4.5 m
-}
+const CAR_LENGTH_M = 5; // target real-world length of the model
 
 export class PlayerCar {
   constructor(scene) {
@@ -23,9 +21,8 @@ export class PlayerCar {
     this.heading = 0;
     this.speed = 0; // m/s, signed
 
-    // Group holds the world position + driving yaw.
-    // The model child holds the fixed "stand upright + face forward" transform,
-    // so the two rotations never interfere (this is what fixes the deformation).
+    // Outer group: world position + driving yaw.
+    // Inner model: fixed scale + upright/forward correction.
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
@@ -33,46 +30,46 @@ export class PlayerCar {
   }
 
   _load() {
-    const scale = carScale();
-    const matBody = new THREE.MeshStandardMaterial({
-      color: 0x2299ff, metalness: 0.6, roughness: 0.35, emissive: 0x062138,
-    });
-    const matWin = new THREE.MeshStandardMaterial({
-      color: 0x99ddff, metalness: 0.9, roughness: 0.1,
-      transparent: true, opacity: 0.5,
-    });
+    const loader = new GLTFLoader();
+    loader.load('assets/models/car/truck.glb', (gltf) => {
+      const model = gltf.scene;
 
-    const loader = new OBJLoader();
-    loader.load('assets/models/spinner.obj', (obj) => {
-      const mesh = obj.children[0];
-      mesh.material = matBody;
-      mesh.geometry.computeVertexNormals();
-      this._fitModel(mesh, scale);
-      this.group.add(mesh);
-    });
-    loader.load('assets/models/spinner_windows.obj', (obj) => {
-      const mesh = obj.children[0];
-      mesh.material = matWin;
-      this._fitModel(mesh, scale);
-      this.group.add(mesh);
+      // --- normalise the model into a 1-unit-up, forward-facing local frame ---
+      // 1) measure its bounding box
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+
+      // 2) recentre to origin, sit on ground (z=0 base)
+      model.position.sub(center);
+      model.position.z += size.z / 2; // (after the upright tilt, see below)
+
+      // Kenney models are Y-up, facing -Z. Stand them up into our Z-up world.
+      const wrapper = new THREE.Group();
+      wrapper.add(model);
+      wrapper.rotation.x = Math.PI / 2; // Y-up → Z-up
+
+      // 3) scale so the longest horizontal axis ≈ CAR_LENGTH_M in mercator units
+      const longest = Math.max(size.x, size.z); // x or z is the length
+      const targetMerc = CAR_LENGTH_M * mercatorScale();
+      const scale = targetMerc / longest;
+      wrapper.scale.setScalar(scale);
+
+      // brighten materials a touch so it reads in daylight
+      model.traverse((o) => {
+        if (o.isMesh && o.material) {
+          o.material.metalness = Math.min(o.material.metalness ?? 0.3, 0.4);
+          o.material.roughness = 0.5;
+        }
+      });
+
+      this.group.add(wrapper);
+      this._modelReady = true;
+      this._sync();
     });
   }
-
-  // Apply the fixed model-space correction: scale, stand upright (Y-up → Z-up),
-  // and rotate so the nose points along the group's local +Y (forward).
-  _fitModel(mesh, scale) {
-    mesh.scale.setScalar(scale);
-    // Tilt the Y-up model to be Z-up.
-    mesh.rotation.x = Math.PI / 2;
-    // The model's length runs along local X; after the tilt, rotate about Z so
-    // the nose aligns with the group's forward axis. Flip via _modelYawOffset.
-    mesh.rotateZ(this._modelYawOffset ?? -Math.PI / 2);
-    // Lift slightly so wheels sit on the road, not through it.
-    mesh.position.z = scale * 1.3;
-  }
-
-  // Knob: if the car drives sideways/backward, set to 0, π/2, π, or -π/2.
-  get _modelYawOffset() { return -Math.PI / 2; }
 
   update(delta, keys = {}) {
     const MAX_SPEED = 22, ACCEL = 14, BRAKE = 28, REVERSE = 8, STEER = 2.0;
@@ -106,15 +103,19 @@ export class PlayerCar {
   _sync() {
     const p = worldToMap(this.lng, this.lat, 0);
     this.group.position.copy(p);
-    // Yaw the whole group to face the heading, in mercator space.
-    // mercator Y is flipped vs north, so derive yaw from a step ahead.
+
+    // Derive yaw in mercator space (Y is flipped vs north) from a step ahead.
     const ahead = worldToMap(
       this.lng + Math.sin(this.heading) * 1e-5,
       this.lat + Math.cos(this.heading) * 1e-5, 0
     );
     const yaw = Math.atan2(ahead.y - p.y, ahead.x - p.x);
-    this.group.rotation.set(0, 0, yaw);
+    // +HALF_PI aligns the model's forward (-Z → after tilt) with travel.
+    this.group.rotation.set(0, 0, yaw + this._yawOffset);
   }
+
+  // Knob if the truck faces the wrong way: try 0, π/2, π, -π/2.
+  get _yawOffset() { return -Math.PI / 2; }
 
   getState() {
     return { lng: this.lng, lat: this.lat, heading: this.heading, speed: this.speed };

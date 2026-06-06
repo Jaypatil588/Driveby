@@ -1,8 +1,8 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Free OpenFreeMap "dark" style — no API key, OpenMapTiles source
-const STYLE = 'https://tiles.openfreemap.org/styles/dark';
+// Free OpenFreeMap "liberty" style — daylight, no API key, OpenMapTiles source
+const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 // SF Financial District centre
 export const SF_CENTER = [-122.3988, 37.7956];
@@ -44,10 +44,10 @@ export function initMap() {
           type: 'fill-extrusion',
           minzoom: 14,
           paint: {
-            'fill-extrusion-color': '#1a1a2e',
+            'fill-extrusion-color': '#c8ccd4',
             'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
             'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
-            'fill-extrusion-opacity': 0.9,
+            'fill-extrusion-opacity': 0.85,
           },
         });
       }

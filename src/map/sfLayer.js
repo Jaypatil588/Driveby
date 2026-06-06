@@ -37,14 +37,13 @@ class SFLayer {
     this.renderer.autoClear = false;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // Lighting tuned for the metallic car material
-    const sun = new THREE.DirectionalLight(0xffffff, 3.0);
-    sun.position.set(0.5, -1, 1).normalize();
+    // Daylight: warm sun + sky-blue fill + bright ambient
+    const sun = new THREE.DirectionalLight(0xfff4e0, 3.0);
+    sun.position.set(0.6, -0.8, 1).normalize();
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x88aaff, 1.5);
-    fill.position.set(-0.5, 1, 0.5).normalize();
-    this.scene.add(fill);
-    this.scene.add(new THREE.AmbientLight(0x607090, 2.0));
+    const sky = new THREE.HemisphereLight(0xbfd8ff, 0x88886a, 2.0);
+    this.scene.add(sky);
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   }
 
   render(gl, args) {
