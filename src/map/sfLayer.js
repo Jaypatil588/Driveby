@@ -44,9 +44,13 @@ class SFLayer {
     this.scene.add(new THREE.AmbientLight(0x404060, 1.5));
   }
 
-  render(gl, matrix) {
-    // MapLibre passes a column-major matrix — feed it to the Three.js camera
-    this.camera.projectionMatrix.fromArray(matrix);
+  render(gl, args) {
+    // MapLibre v4 passes a flat array; v5 passes a ProjectionData object
+    const m = Array.isArray(args)
+      ? args
+      : (args.defaultProjectionData?.mainMatrix ?? args.projectionData?.mainMatrix ?? args);
+
+    this.camera.projectionMatrix.fromArray(m);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
 
     this.renderer.resetState();

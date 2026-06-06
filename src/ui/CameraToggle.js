@@ -1,28 +1,16 @@
-import * as THREE from 'three';
-import { worldToMap, mercatorScale } from '../map/sfLayer.js';
-import { SF_CENTER } from '../map/mapbox.js';
+import maplibregl from 'maplibre-gl';
 
 const MODES = ['birds-eye', 'follow'];
 
+// Bird's eye map settings
+const BIRDS_EYE = { pitch: 45, zoom: 16, bearing: 0 };
+// Follow cam offsets (applied relative to car heading)
+const FOLLOW = { pitch: 60, zoom: 18 };
+
 export class CameraToggle {
-  constructor(scene) {
-    this.scene = scene;
+  constructor(map) {
+    this.map = map;
     this.modeIndex = 0;
-
-    const m = mercatorScale();
-
-    // Bird's eye — orthographic looking straight down
-    const halfW = m * 400;
-    this.birdEye = new THREE.OrthographicCamera(-halfW, halfW, halfW, -halfW, -1, 1);
-    const centre = worldToMap(SF_CENTER[0], SF_CENTER[1], 0);
-    this.birdEye.position.set(centre.x, centre.y, 1);
-    this.birdEye.up.set(0, 1, 0); // +Y = north in mercator
-
-    // Follow cam — perspective, positioned behind/above car
-    this.followCam = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, m * 0.1, m * 5000);
-    this._followTarget = new THREE.Vector3();
-    this._followPos = new THREE.Vector3();
-
     this._label = document.getElementById('cam-label');
 
     window.addEventListener('keydown', (e) => {
@@ -34,45 +22,35 @@ export class CameraToggle {
 
   toggle() {
     this.modeIndex = (this.modeIndex + 1) % MODES.length;
+    if (this.modeIndex === 0) {
+      // snap back to birds eye
+      this.map.easeTo({ pitch: BIRDS_EYE.pitch, zoom: BIRDS_EYE.zoom, bearing: BIRDS_EYE.bearing, duration: 600 });
+    }
     this._updateLabel();
   }
 
-  // Call each frame; car is a PlayerCar instance
+  // Call each frame with the player car
   update(car) {
-    if (this.modeIndex === 1 && car && car.mesh) {
-      const m = mercatorScale();
-      const mesh = car.mesh;
+    if (this.modeIndex !== 1 || !car) return;
 
-      // target = car position
-      this._followTarget.copy(mesh.position);
+    // Convert heading (radians, clockwise from north) to MapLibre bearing (degrees, clockwise from north)
+    const bearingDeg = (car.heading * 180 / Math.PI) % 360;
 
-      // desired position: behind and above the car
-      const offset = new THREE.Vector3(
-        -Math.sin(car.heading) * m * 20,
-        -Math.cos(car.heading) * m * 20,
-        m * 8
-      );
-      const desired = mesh.position.clone().add(offset);
-      this._followPos.lerp(desired, 0.05);
+    // Re-centre map on car's lng/lat each frame in follow mode
+    // We need lng/lat back from mercator pos
+    const mc = new maplibregl.MercatorCoordinate(car.pos.x, car.pos.y, car.pos.z);
+    const lngLat = mc.toLngLat();
 
-      this.followCam.position.copy(this._followPos);
-      this.followCam.lookAt(this._followTarget);
-      this.followCam.up.set(0, 0, 1);
-    }
-  }
-
-  activeCamera() {
-    return this.modeIndex === 0 ? this.birdEye : this.followCam;
-  }
-
-  onResize() {
-    this.followCam.aspect = window.innerWidth / window.innerHeight;
-    this.followCam.updateProjectionMatrix();
+    this.map.jumpTo({
+      center: [lngLat.lng, lngLat.lat],
+      bearing: bearingDeg,
+      pitch: FOLLOW.pitch,
+      zoom: FOLLOW.zoom,
+    });
   }
 
   _updateLabel() {
     if (!this._label) return;
-    const mode = MODES[this.modeIndex];
-    this._label.textContent = mode === 'birds-eye' ? "[C] Bird's Eye" : '[C] Follow Cam';
+    this._label.textContent = this.modeIndex === 0 ? "[C] Bird's Eye" : '[C] Follow Cam';
   }
 }

@@ -1,8 +1,8 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Free OpenFreeMap "liberty" style — no API key required, has 3D buildings
-const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+// Free OpenFreeMap "bright" style — no API key, OpenMapTiles source
+const STYLE = 'https://tiles.openfreemap.org/styles/bright';
 
 // SF Financial District centre
 export const SF_CENTER = [-122.3988, 37.7956];
@@ -16,7 +16,7 @@ export function initMap() {
       style: STYLE,
       center: SF_CENTER,
       zoom: 16,
-      pitch: 0,
+      pitch: 45,
       bearing: 0,
       antialias: true,
     });
@@ -30,19 +30,19 @@ export function initMap() {
     _map.touchZoomRotate.disable();
 
     _map.on('load', () => {
-      // add dark 3D buildings layer on top of whatever the style provides
+      // OpenFreeMap uses 'openmaptiles' source with 'building' layer
       if (!_map.getLayer('3d-buildings')) {
         _map.addLayer({
           id: '3d-buildings',
-          source: 'composite',
+          source: 'openmaptiles',
           'source-layer': 'building',
-          filter: ['==', 'extrude', 'true'],
           type: 'fill-extrusion',
+          minzoom: 14,
           paint: {
-            'fill-extrusion-color': '#1a1a2e',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.9,
+            'fill-extrusion-color': '#2a2a3e',
+            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
+            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+            'fill-extrusion-opacity': 0.85,
           },
         });
       }
