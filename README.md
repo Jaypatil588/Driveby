@@ -63,8 +63,8 @@ teams**.
 | Road, lane & signal data | OpenStreetMap / Overpass extract |
 | 3D agents & scene | Three.js (custom MapLibre layer) |
 | Physics & collision | Rapier.js (WASM, runs in browser) |
-| Web server | Node.js + Express |
-| Real-time comms | WebSocket |
+| Web server | Ruby on Rails (Puma) |
+| Real-time comms | WebSocket relay + Action Cable |
 | RL backend | Python + PyTorch policy over WebSocket |
 | Data & logging | JSONL datasets + Postgres (InsForge) |
 
@@ -76,12 +76,14 @@ teams**.
 
 - [Node.js](https://nodejs.org/en) v18+
 - npm (comes with Node)
+- Ruby 3.2+ with Bundler (Rails 8 backend)
 - Python 3 with `torch` and `websocket-client`
 
 ### 1. Install dependencies
 
 ```bash
 npm install
+cd backend && bundle install && bin/rails db:prepare && cd ..
 ```
 
 ### 2. Start the full dev stack
@@ -91,8 +93,8 @@ npm run dev
 ```
 
 This clears ports `3000` and `3001`, starts webpack in watch mode, starts the
-Express server, starts the WebSocket relay, and launches the Python PyTorch RL
-backend.
+Rails server (static frontend + `/api/status`), starts the WebSocket relay, and
+launches the Python PyTorch RL backend.
 
 Then open [http://localhost:3000](http://localhost:3000) in your browser.
 
@@ -170,9 +172,11 @@ Python backend read the same values.
 ├── config/
 │   └── simulation.json       — shared browser/Python agent and sensor counts
 ├── server/
-│   ├── dev.js                — full dev stack launcher
-│   ├── index.js              — Express server, WebSocket relay, and RL backend launcher
-│   └── wsRelay.js            — WebSocket relay to RL backend (port 3001)
+│   └── dev.js                — full dev stack launcher (webpack + Rails)
+├── backend/                  — Ruby on Rails app (Puma)
+│   ├── app/channels/         — Action Cable SimulationChannel
+│   ├── app/controllers/api/  — status API
+│   └── lib/driveby/          — WS relay, RL supervisor, static file middleware
 ├── rl/
 │   ├── server.py             — PyTorch RL backend
 │   └── dataset_logger.py     — logs every transition to exportable JSONL datasets

@@ -10,14 +10,13 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "webpack --mode production",
     "dev": "node server/dev.js",
-    "start": "node server/index.js",
+    "start": "npm run rails",
+    "rails": "cd backend && bundle exec rails server -b 0.0.0.0 -p 3000",
     "rl:backend": "python3 -u rl/server.py"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
-    "express": "^5.2.1",
-    "three": "0.159.0",
-    "ws": "^8.21.0"
+    "three": "0.159.0"
   },
   "devDependencies": {
     "css-loader": "^7.1.4",

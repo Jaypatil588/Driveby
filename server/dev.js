@@ -1,6 +1,9 @@
 const { execFileSync, spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const PORTS = ['3000', '3001'];
+const ROOT = path.join(__dirname, '..');
 
 function getPortPids(port) {
   try {
@@ -43,10 +46,19 @@ for (const port of PORTS) {
 const children = new Set();
 let shuttingDown = false;
 
-function start(name, command, args) {
+function rubyPathPrefix() {
+  const candidates = [
+    '/opt/homebrew/opt/ruby/bin',
+    '/opt/homebrew/lib/ruby/gems/4.0.0/bin',
+    '/usr/local/opt/ruby/bin'
+  ];
+  return candidates.filter((dir) => fs.existsSync(dir)).join(':');
+}
+
+function start(name, command, args, options = {}) {
   const child = spawn(command, args, {
-    cwd: process.cwd(),
-    env: process.env,
+    cwd: options.cwd || process.cwd(),
+    env: { ...process.env, ...options.env },
     stdio: 'inherit'
   });
 
@@ -79,5 +91,14 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
+const bundleBin = process.env.BUNDLE_BIN || 'bundle';
+const prefix = rubyPathPrefix();
+const envPath = prefix
+  ? `${prefix}:${process.env.PATH || ''}`
+  : process.env.PATH;
+
 start('webpack', 'npx', ['webpack', '--mode', 'development', '--watch']);
-start('server', 'node', ['server/index.js']);
+start('rails', bundleBin, ['exec', 'rails', 'server', '-b', '0.0.0.0', '-p', '3000'], {
+  cwd: path.join(ROOT, 'backend'),
+  env: { PATH: envPath }
+});
