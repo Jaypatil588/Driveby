@@ -1,12 +1,19 @@
 import json
+import os
 import sys
 
 import torch
 import torch.nn as nn
 import websocket
 
+from dataset_logger import DatasetLogger
+
 STATE_SIZE = 20
 AGENT_COUNT = 100
+
+# Dataset logging is opt-in: run with  DRIVEBY_LOG_DATASET=1 python rl/server.py
+LOG_DATASET = os.environ.get("DRIVEBY_LOG_DATASET", "0") == "1"
+dataset = DatasetLogger(STATE_SIZE, AGENT_COUNT, enabled=LOG_DATASET)
 
 
 class PolicyNet(nn.Module):
@@ -118,6 +125,25 @@ def on_message(ws, message):
             throttle = 0.0
             brake = abs(throttle_raw)
 
+        action = {"throttle": throttle, "steering": steering, "brake": brake}
+
+        # Record this (state, action, reward, events) transition to the dataset.
+        dataset.log(
+            tick=tick,
+            agent_id=agent_id,
+            state=state_vector,
+            action=action,
+            reward=agent.score,
+            events={
+                "collided": bool(collided),
+                "reset": bool(agent.reset_needed),
+                "generation": agent.generation,
+            },
+            lng=obs.get("lng"),
+            lat=obs.get("lat"),
+            waypoint=obs.get("waypoint"),
+        )
+
         response_agents.append({
             "id": agent_id,
             "throttle": throttle,
@@ -167,4 +193,7 @@ if __name__ == "__main__":
         print("Required package websocket-client is missing or shadowed by legacy websocket.", file=sys.stderr)
         sys.exit(1)
 
-    connect_ws()
+    try:
+        connect_ws()
+    finally:
+        dataset.close()
