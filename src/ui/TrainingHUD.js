@@ -2,8 +2,8 @@ import { mercatorScale } from '../map/sfLayer.js';
 
 export class TrainingHUD {
   constructor(agents, onSelectAgent) {
-    if (!Array.isArray(agents) || agents.length !== 10) {
-      throw new Error(`TrainingHUD requires exactly 10 agents, received ${agents?.length}.`);
+    if (!Array.isArray(agents) || agents.length === 0) {
+      throw new Error(`TrainingHUD requires at least one agent, received ${agents?.length}.`);
     }
 
     this.agents = agents;
@@ -274,7 +274,7 @@ export class TrainingHUD {
     if (!this.container) throw new Error('TrainingHUD render called before container creation.');
 
     let gridHtml = '';
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < this.agents.length; i++) {
       const activeClass = this.selectedAgentId === i ? 'active' : '';
       gridHtml += `<div class="agent-btn ${activeClass}" onclick="window.hud.selectAgent(${i})">Agent ${i + 1}</div>`;
     }
@@ -285,7 +285,7 @@ export class TrainingHUD {
     this.container.innerHTML = `
       <h2>PyTorch Agent Monitor</h2>
       <div class="hud-section">
-        <div class="telemetry-row"><span class="telemetry-label">Active Agents:</span> <span class="telemetry-val">10 (PyTorch backend)</span></div>
+        <div class="telemetry-row"><span class="telemetry-label">Active Agents:</span> <span class="telemetry-val">${this.agents.length} (PyTorch backend)</span></div>
       </div>
       <div class="hud-section">
         <div class="telemetry-label" style="margin-bottom: 6px;">Focus Target:</div>

@@ -8,7 +8,7 @@ const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN;
 // Centered on the player car spawn (Market St & 1st St) so the car is in view.
 const SF_CENTER = [-122.3988, 37.7916];
 
-// Creates the Mapbox map locked to a top-down bird's-eye view of downtown SF
+// Creates the Mapbox map with a top-down bird's-eye view of downtown SF
 // with the 3D buildings layer enabled. Returns the map instance.
 function createMap(container = 'map') {
 
@@ -22,20 +22,13 @@ function createMap(container = 'map') {
     container,
     style: 'mapbox://styles/mapbox/dark-v11',
     center: SF_CENTER,
-    zoom: 18,
+    zoom: 16.25,
     pitch: 0,    // bird's eye to start
     bearing: 0,
     antialias: true
   });
 
-  // Lock interaction — the map must not be draggable or zoomable by the user.
-  map.dragPan.disable();
-  map.scrollZoom.disable();
-  map.doubleClickZoom.disable();
-  map.boxZoom.disable();
-  map.dragRotate.disable();
-  map.keyboard.disable();
-  map.touchZoomRotate.disable();
+  map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-left');
 
   map.on('load', () => add3dBuildings(map));
 

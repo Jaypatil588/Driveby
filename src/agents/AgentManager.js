@@ -21,7 +21,7 @@ const SPAWN_POINTS = [
   [-122.3956, 37.7958], [-122.4002, 37.7963],
 ];
 
-const AGENT_COUNT = 10;
+const AGENT_COUNT = 100;
 const SENSORS_ENABLED = 10;
 const ROUTE_LINE_Y = 0.35;
 

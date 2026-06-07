@@ -6,6 +6,7 @@ import torch.nn as nn
 import websocket
 
 STATE_SIZE = 20
+AGENT_COUNT = 100
 
 
 class PolicyNet(nn.Module):
@@ -34,7 +35,7 @@ class AgentState:
         self.reset_needed = False
 
 
-agents = {i: AgentState(i) for i in range(10)}
+agents = {i: AgentState(i) for i in range(AGENT_COUNT)}
 
 
 def mutate_policy(parent_policy, child_policy, mutation_rate=0.25, mutation_scale=0.06):

@@ -1,7 +1,6 @@
 // Manages the two camera modes (Task 6). Because the Three.js scene is rendered
-// through Mapbox's shared camera, both modes drive the Mapbox camera, keeping
-// the player car centred so it never drives off-screen:
-//   - bird's eye: top-down view (pitch 0, north up)
+// through Mapbox's shared camera:
+//   - bird's eye: free map view controlled by user pan/zoom/drag
 //   - follow cam: pitched view that rotates to trail behind the car
 class CameraToggle {
 
@@ -22,12 +21,13 @@ class CameraToggle {
     this.updateLabel();
   }
 
-  // Called every frame with the player car. Keeps the camera locked on the car.
+  // Called every frame with the player car. Follow mode locks onto the car;
+  // bird mode leaves the map under direct user control.
   update(car) {
     const { lng, lat, heading } = car.getPosition();
 
     if (this.mode === 'bird') {
-      this.map.jumpTo({ center: [lng, lat], bearing: 0, pitch: 0, zoom: 16.25 });
+      return;
     } else {
       // follow cam: look in the car's direction of travel, pitched back
       const bearing = heading * 180 / Math.PI;

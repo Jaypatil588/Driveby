@@ -11,6 +11,8 @@ const MAX_STEER_RADS = 1.7;
 const LANE_WIDTH_M = 3.6;
 const WAYPOINT_REACHED_M = 10;
 const RULE_LOOKAHEAD_M = 55;
+const STUCK_SECONDS = 7;
+const STUCK_PROGRESS_MPS = 0.25;
 
 export class NeuralAgent extends CarAgent {
   constructor(id, lng, lat, physicsWorld, scene, hue, roadGraph) {
@@ -33,6 +35,7 @@ export class NeuralAgent extends CarAgent {
     this.routeLength = 0;
     this.routeProgress = 0;
     this.waypointEdges = [];
+    this.stuckTimer = 0;
 
     this.reset();
   }
@@ -44,6 +47,7 @@ export class NeuralAgent extends CarAgent {
     this.collisionReported = false;
     this.reachedWaypoint = false;
     this.lastAction = { throttle: 0, steering: 0, brake: 0 };
+    this.stuckTimer = 0;
 
     if (!resetCurrentRoute || this.waypoints.length < 2) {
       const route = this.roadGraph.getValidRoute();
@@ -156,6 +160,7 @@ export class NeuralAgent extends CarAgent {
     this._syncMeshAndBody();
 
     this.score -= 0.01;
+    this._checkStuck(delta, before, after, environment);
     this._checkCollisions(allAgents, environment);
   }
 
@@ -239,6 +244,7 @@ export class NeuralAgent extends CarAgent {
     this._setHeadingToTarget();
     this._placeOnRandomLane();
     this.routeProgress = this._getRouteMetrics(this.pos).progress;
+    this.stuckTimer = 0;
     return true;
   }
 
@@ -304,6 +310,32 @@ export class NeuralAgent extends CarAgent {
   _markCollision() {
     this.collided = true;
     this.score -= 100;
+  }
+
+  _checkStuck(delta, before, after, environment) {
+    if (this.collided) return;
+
+    const rules = this._getForwardRuleState(environment, after);
+    const waitingForTrafficRule =
+      (rules.signalDistance < 0.18 && rules.signalState >= 0.5) ||
+      (rules.crosswalkDistance < 0.18 && rules.crosswalkOccupied > 0.5);
+
+    if (waitingForTrafficRule) {
+      this.stuckTimer = 0;
+      return;
+    }
+
+    const progressRate = (after.progress - before.progress) / delta;
+    if (progressRate < STUCK_PROGRESS_MPS) {
+      this.stuckTimer += delta;
+    } else {
+      this.stuckTimer = 0;
+    }
+
+    if (this.stuckTimer >= STUCK_SECONDS) {
+      this.score -= 50;
+      this._markCollision();
+    }
   }
 
   getStateVector(allAgents, environment) {
