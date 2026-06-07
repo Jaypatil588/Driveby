@@ -213,7 +213,7 @@ export class TrainingHUD {
   _updateStateVectorUI(state) {
     const el = document.getElementById('state-vector-container');
     if (!el) throw new Error('TrainingHUD missing #state-vector-container.');
-    if (state.length !== 16) throw new Error(`TrainingHUD expected 16 state values, received ${state.length}.`);
+    if (state.length !== 20) throw new Error(`TrainingHUD expected 20 state values, received ${state.length}.`);
 
     const formatVal = (v) => {
       const valStr = v.toFixed(3);
@@ -236,29 +236,36 @@ export class TrainingHUD {
       </div>
       <div class="state-group">
         <div class="state-group-title">Navigation Target</div>
-        <div class="state-item"><span class="state-item-name">Dist to Waypoint:</span> ${formatVal(state[2])}</div>
-        <div class="state-item"><span class="state-item-name">Angle to Waypoint:</span> ${formatVal(state[3])}</div>
+        <div class="state-item"><span class="state-item-name">Remaining Route:</span> ${formatVal(state[2])}</div>
+        <div class="state-item"><span class="state-item-name">Lane Offset:</span> ${formatVal(state[3])}</div>
+      </div>
+      <div class="state-group">
+        <div class="state-group-title">Traffic Rules</div>
+        <div class="state-item"><span class="state-item-name">Signal Distance:</span> ${formatVal(state[4])}</div>
+        <div class="state-item"><span class="state-item-name">Signal State:</span> ${formatVal(state[5])}</div>
+        <div class="state-item"><span class="state-item-name">Crosswalk Distance:</span> ${formatVal(state[6])}</div>
+        <div class="state-item"><span class="state-item-name">Crosswalk Occupied:</span> ${formatVal(state[7])}</div>
       </div>
       <div class="state-group">
         <div class="state-group-title">Asset 1 (Closest)</div>
-        <div class="state-item"><span class="state-item-name">Type:</span> <span class="state-item-val">${getAssetTypeName(state[4])}</span></div>
-        <div class="state-item"><span class="state-item-name">Relative Dist:</span> ${formatVal(state[5])}</div>
-        <div class="state-item"><span class="state-item-name">Relative Angle:</span> ${formatVal(state[6])}</div>
-        <div class="state-item"><span class="state-item-name">Rule State:</span> ${formatVal(state[7])}</div>
-      </div>
-      <div class="state-group">
-        <div class="state-group-title">Asset 2</div>
         <div class="state-item"><span class="state-item-name">Type:</span> <span class="state-item-val">${getAssetTypeName(state[8])}</span></div>
         <div class="state-item"><span class="state-item-name">Relative Dist:</span> ${formatVal(state[9])}</div>
         <div class="state-item"><span class="state-item-name">Relative Angle:</span> ${formatVal(state[10])}</div>
         <div class="state-item"><span class="state-item-name">Rule State:</span> ${formatVal(state[11])}</div>
       </div>
       <div class="state-group">
-        <div class="state-group-title">Asset 3</div>
+        <div class="state-group-title">Asset 2</div>
         <div class="state-item"><span class="state-item-name">Type:</span> <span class="state-item-val">${getAssetTypeName(state[12])}</span></div>
         <div class="state-item"><span class="state-item-name">Relative Dist:</span> ${formatVal(state[13])}</div>
         <div class="state-item"><span class="state-item-name">Relative Angle:</span> ${formatVal(state[14])}</div>
         <div class="state-item"><span class="state-item-name">Rule State:</span> ${formatVal(state[15])}</div>
+      </div>
+      <div class="state-group">
+        <div class="state-group-title">Asset 3</div>
+        <div class="state-item"><span class="state-item-name">Type:</span> <span class="state-item-val">${getAssetTypeName(state[16])}</span></div>
+        <div class="state-item"><span class="state-item-name">Relative Dist:</span> ${formatVal(state[17])}</div>
+        <div class="state-item"><span class="state-item-name">Relative Angle:</span> ${formatVal(state[18])}</div>
+        <div class="state-item"><span class="state-item-name">Rule State:</span> ${formatVal(state[19])}</div>
       </div>
     `;
   }
@@ -293,7 +300,7 @@ export class TrainingHUD {
         <div class="telemetry-row"><span class="telemetry-label">Heading:</span> <span class="telemetry-val" id="heading-val">${(agent.heading * 180 / Math.PI).toFixed(0)} deg</span></div>
         <div class="telemetry-row"><span class="telemetry-label">Status:</span> <span class="telemetry-val" id="status-val" style="color: #38bdf8; font-weight: bold;">DRIVING</span></div>
       </div>
-      <h2 style="font-size: 13px; color: #f59e0b; margin-top: 12px;">16-D State Vector ($S_t$)</h2>
+      <h2 style="font-size: 13px; color: #f59e0b; margin-top: 12px;">20-D State Vector ($S_t$)</h2>
       <div class="hud-section">
         <div class="state-vector-box" id="state-vector-container">Loading state vector...</div>
       </div>

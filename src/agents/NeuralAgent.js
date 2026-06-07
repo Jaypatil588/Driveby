@@ -1,9 +1,16 @@
 import * as THREE from 'three';
 import { CarAgent } from './CarAgent.js';
 import { BOUNDS } from './PlayerCar.js';
-import { samplePathToWaypoints } from '../map/RoadGraph.js';
+import { sampleRouteToWaypoints } from '../map/RoadGraph.js';
 
 const MAX_SPEED_MS = 14;
+const ACCEL_MS2 = 7;
+const BRAKE_MS2 = 12;
+const DRAG_MS2 = 1.5;
+const MAX_STEER_RADS = 1.7;
+const LANE_WIDTH_M = 3.6;
+const WAYPOINT_REACHED_M = 10;
+const RULE_LOOKAHEAD_M = 55;
 
 export class NeuralAgent extends CarAgent {
   constructor(id, lng, lat, physicsWorld, scene, hue, roadGraph) {
@@ -20,6 +27,12 @@ export class NeuralAgent extends CarAgent {
     this.waypoints = [];
     this.currentWpIdx = 0;
     this.targetWp = null;
+    this.routeStartIdx = null;
+    this.routeEndIdx = null;
+    this.routeSegments = [];
+    this.routeLength = 0;
+    this.routeProgress = 0;
+    this.waypointEdges = [];
 
     this.reset();
   }
@@ -34,13 +47,20 @@ export class NeuralAgent extends CarAgent {
 
     if (!resetCurrentRoute || this.waypoints.length < 2) {
       const route = this.roadGraph.getValidRoute();
-      this.waypoints = samplePathToWaypoints(route.path, 20);
+      this.routeStartIdx = route.startIdx;
+      this.routeEndIdx = route.endIdx;
+      const sampled = sampleRouteToWaypoints(route);
+      this.waypoints = sampled.waypoints;
+      this.waypointEdges = sampled.waypointEdges;
+      this._buildRouteSegments();
     }
 
     this.pos.copy(this.waypoints[0]);
     this.currentWpIdx = 1;
     this.targetWp = this.waypoints[1];
     this._setHeadingToTarget();
+    this._placeOnRandomLane();
+    this.routeProgress = this._getRouteMetrics(this.pos).progress;
     this._syncMeshAndBody();
   }
 
@@ -60,44 +80,188 @@ export class NeuralAgent extends CarAgent {
     body.setTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z }, true);
   }
 
+  _buildRouteSegments() {
+    this.routeSegments = [];
+    this.routeLength = 0;
+
+    for (let i = 0; i < this.waypoints.length - 1; i++) {
+      const start = this.waypoints[i];
+      const end = this.waypoints[i + 1];
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const length = Math.hypot(dx, dz);
+      if (length <= 0) throw new Error(`NeuralAgent ${this.id} route has zero-length segment ${i}.`);
+      const edge = this.waypointEdges[i];
+      if (!edge || !Number.isInteger(edge.laneCount) || edge.laneCount <= 0) {
+        throw new Error(`NeuralAgent ${this.id} route segment ${i} is missing lane metadata.`);
+      }
+
+      this.routeSegments.push({
+        start,
+        end,
+        dx,
+        dz,
+        length,
+        laneCount: edge.laneCount,
+        roadId: edge.roadId,
+        roadName: edge.roadName,
+        startProgress: this.routeLength,
+        heading: Math.atan2(dx, dz),
+      });
+      this.routeLength += length;
+    }
+  }
+
+  _placeOnRandomLane() {
+    const segment = this.routeSegments[0];
+    if (!segment) throw new Error(`NeuralAgent ${this.id} cannot place on lane without route segments.`);
+
+    const laneIndex = Math.floor(Math.random() * segment.laneCount);
+    const laneOffset = (laneIndex - (segment.laneCount - 1) / 2) * LANE_WIDTH_M;
+    const perpX = segment.dz / segment.length;
+    const perpZ = -segment.dx / segment.length;
+    this.pos.x += perpX * laneOffset;
+    this.pos.z += perpZ * laneOffset;
+  }
+
+  applyAction(action, delta) {
+    const { throttle, steering, brake } = action;
+    if (![throttle, steering, brake].every(Number.isFinite)) {
+      throw new Error(`Invalid route action for agent ${this.id}: throttle, steering, and brake must be finite numbers.`);
+    }
+
+    const drag = Math.sign(this.speed) * DRAG_MS2 * delta;
+    this.speed = THREE.MathUtils.clamp(
+      this.speed + throttle * ACCEL_MS2 * delta - brake * BRAKE_MS2 * delta - drag,
+      0,
+      MAX_SPEED_MS
+    );
+    this.heading += steering * MAX_STEER_RADS * Math.max(this.speed / MAX_SPEED_MS, 0.25) * delta;
+  }
+
   update(delta, allAgents, environment) {
     if (delta <= 0) throw new Error(`NeuralAgent ${this.id} received non-positive delta ${delta}.`);
     if (!Array.isArray(allAgents)) throw new Error('NeuralAgent update requires allAgents array.');
     this._validateEnvironment(environment);
 
-    this.applyAction(this.lastAction);
+    const before = this._getRouteMetrics(this.pos);
+
+    this.applyAction(this.lastAction, delta);
     this.pos.x += Math.sin(this.heading) * this.speed * delta;
     this.pos.z += Math.cos(this.heading) * this.speed * delta;
+
+    const after = this._getRouteMetrics(this.pos);
+    this._scoreRouteProgress(before, after);
+    this._syncRouteTarget(after);
     this._syncMeshAndBody();
 
     this.score -= 0.01;
-    this._advanceWaypoint();
     this._checkCollisions(allAgents, environment);
   }
 
-  _advanceWaypoint() {
-    const distToWp = this.pos.distanceTo(this.targetWp);
-    if (distToWp >= 14) return;
+  _getRouteMetrics(pos) {
+    if (this.routeSegments.length === 0) {
+      throw new Error(`NeuralAgent ${this.id} cannot measure route without route segments.`);
+    }
 
+    let best = null;
+    for (let i = 0; i < this.routeSegments.length; i++) {
+      const segment = this.routeSegments[i];
+      const relX = pos.x - segment.start.x;
+      const relZ = pos.z - segment.start.z;
+      const t = THREE.MathUtils.clamp((relX * segment.dx + relZ * segment.dz) / (segment.length * segment.length), 0, 1);
+      const closestX = segment.start.x + segment.dx * t;
+      const closestZ = segment.start.z + segment.dz * t;
+      const offX = pos.x - closestX;
+      const offZ = pos.z - closestZ;
+      const distance = Math.hypot(offX, offZ);
+      const signedLateral = offX * (segment.dz / segment.length) + offZ * (-segment.dx / segment.length);
+
+      if (!best || distance < best.distance) {
+        best = {
+          segmentIndex: i,
+          progress: segment.startProgress + segment.length * t,
+          distance,
+          signedLateral,
+          halfWidth: (segment.laneCount * LANE_WIDTH_M) / 2,
+          laneCount: segment.laneCount,
+          heading: segment.heading,
+        };
+      }
+    }
+
+    if (!best) throw new Error(`NeuralAgent ${this.id} could not compute route metrics.`);
+    return best;
+  }
+
+  _scoreRouteProgress(before, after) {
+    const deltaProgress = after.progress - before.progress;
+    if (deltaProgress >= 0) {
+      this.score += deltaProgress * 0.8;
+    } else {
+      this.score += deltaProgress * 2.5;
+    }
+
+    this.score -= Math.abs(after.signedLateral) * 0.02;
+    this.routeProgress = after.progress;
+  }
+
+  _syncRouteTarget(metrics) {
+    while (this.currentWpIdx < this.waypoints.length - 1) {
+      const targetProgress = this._waypointProgress(this.currentWpIdx);
+      if (metrics.progress + WAYPOINT_REACHED_M < targetProgress) break;
+      const changedRoute = this._completeWaypoint();
+      if (changedRoute) return;
+    }
+  }
+
+  _completeWaypoint() {
     this.score += 100;
     this.reachedWaypoint = true;
 
     if (this.currentWpIdx < this.waypoints.length - 1) {
       this.currentWpIdx++;
       this.targetWp = this.waypoints[this.currentWpIdx];
-      return;
+      return false;
     }
 
     this.score += 200;
     const route = this.roadGraph.getValidRoute();
-    this.waypoints = samplePathToWaypoints(route.path, 20);
+    this.routeStartIdx = route.startIdx;
+    this.routeEndIdx = route.endIdx;
+    const sampled = sampleRouteToWaypoints(route);
+    this.waypoints = sampled.waypoints;
+    this.waypointEdges = sampled.waypointEdges;
+    this._buildRouteSegments();
     this.currentWpIdx = 1;
     this.targetWp = this.waypoints[1];
     this.pos.copy(this.waypoints[0]);
     this._setHeadingToTarget();
+    this._placeOnRandomLane();
+    this.routeProgress = this._getRouteMetrics(this.pos).progress;
+    return true;
+  }
+
+  _waypointProgress(index) {
+    if (index < 0 || index >= this.waypoints.length) {
+      throw new Error(`NeuralAgent ${this.id} cannot read waypoint progress for invalid index ${index}.`);
+    }
+    if (index === 0) return 0;
+
+    let progress = 0;
+    for (let i = 0; i < index; i++) {
+      progress += this.waypoints[i].distanceTo(this.waypoints[i + 1]);
+    }
+    return progress;
   }
 
   _checkCollisions(allAgents, environment) {
+    const routeMetrics = this._getRouteMetrics(this.pos);
+    if (Math.abs(routeMetrics.signedLateral) > routeMetrics.halfWidth) {
+      this._markCollision();
+      return;
+    }
+
     const pos = this.getPosition();
     if (pos.lng < BOUNDS.minLng || pos.lng > BOUNDS.maxLng || pos.lat < BOUNDS.minLat || pos.lat > BOUNDS.maxLat) {
       this._markCollision();
@@ -133,6 +297,8 @@ export class NeuralAgent extends CarAgent {
         return;
       }
     }
+
+    this._applyTrafficRulePenalty(environment, routeMetrics);
   }
 
   _markCollision() {
@@ -146,14 +312,24 @@ export class NeuralAgent extends CarAgent {
 
     const state = [];
     state.push(this.speed / MAX_SPEED_MS);
-    state.push(this.heading / (Math.PI * 2));
 
-    const distToWp = this.pos.distanceTo(this.targetWp);
-    state.push(Math.min(distToWp / 100, 1));
+    const routeMetrics = this._getRouteMetrics(this.pos);
+    const routeHeadingError = Math.atan2(Math.sin(routeMetrics.heading - this.heading), Math.cos(routeMetrics.heading - this.heading));
+    state.push(routeHeadingError / Math.PI);
+
+    const remainingRoute = this.routeLength - routeMetrics.progress;
+    state.push(THREE.MathUtils.clamp(remainingRoute / this.routeLength, 0, 1));
+    state.push(THREE.MathUtils.clamp(routeMetrics.signedLateral / routeMetrics.halfWidth, -1, 1));
+
+    const ruleState = this._getForwardRuleState(environment, routeMetrics);
+    state.push(ruleState.signalDistance);
+    state.push(ruleState.signalState);
+    state.push(ruleState.crosswalkDistance);
+    state.push(ruleState.crosswalkOccupied);
 
     const angleToWp = Math.atan2(this.targetWp.z - this.pos.z, this.targetWp.x - this.pos.x) - (Math.PI / 2 - this.heading);
     const relWpAngle = Math.atan2(Math.sin(angleToWp), Math.cos(angleToWp));
-    state.push(relWpAngle / Math.PI);
+    this.reachedWaypoint = Math.abs(relWpAngle) < 0.25;
 
     const detectedAssets = [];
     for (const building of window.buildingObstacles) {
@@ -188,7 +364,7 @@ export class NeuralAgent extends CarAgent {
       }
     }
 
-    if (state.length !== 16) {
+    if (state.length !== 20) {
       throw new Error(`NeuralAgent ${this.id} produced invalid state vector length ${state.length}.`);
     }
     return state;
@@ -205,11 +381,50 @@ export class NeuralAgent extends CarAgent {
   }
 
   _validateEnvironment(environment) {
-    if (!environment || !Array.isArray(environment.pedestrians) || !Array.isArray(environment.cars)) {
-      throw new Error('NeuralAgent requires a TrafficManager environment with pedestrians and cars arrays.');
+    if (!environment || !Array.isArray(environment.pedestrians) || !Array.isArray(environment.cars) ||
+        !Array.isArray(environment.trafficLights) || !Array.isArray(environment.crosswalks)) {
+      throw new Error('NeuralAgent requires a TrafficManager environment with pedestrians, cars, trafficLights, and crosswalks arrays.');
     }
     if (!Array.isArray(window.buildingObstacles)) {
       throw new Error('NeuralAgent requires window.buildingObstacles from buildColliders().');
+    }
+  }
+
+  _getForwardRuleState(environment, routeMetrics) {
+    const signal = this._nearestForwardFeature(environment.trafficLights, routeMetrics, (light) => light.pos);
+    const crosswalk = this._nearestForwardFeature(environment.crosswalks, routeMetrics, (crossing) => crossing.pos);
+
+    return {
+      signalDistance: signal ? THREE.MathUtils.clamp(signal.ahead / RULE_LOOKAHEAD_M, 0, 1) : 1,
+      signalState: signal ? signal.item.ruleState : 0,
+      crosswalkDistance: crosswalk ? THREE.MathUtils.clamp(crosswalk.ahead / RULE_LOOKAHEAD_M, 0, 1) : 1,
+      crosswalkOccupied: crosswalk ? crosswalk.item.occupiedState : 0,
+    };
+  }
+
+  _nearestForwardFeature(items, routeMetrics, getPos) {
+    let nearest = null;
+    for (const item of items) {
+      const metrics = this._getRouteMetrics(getPos(item));
+      const ahead = metrics.progress - routeMetrics.progress;
+      if (ahead < 0 || ahead > RULE_LOOKAHEAD_M) continue;
+      if (Math.abs(metrics.signedLateral) > metrics.halfWidth + 3) continue;
+      if (!nearest || ahead < nearest.ahead) nearest = { item, ahead };
+    }
+    return nearest;
+  }
+
+  _applyTrafficRulePenalty(environment, routeMetrics) {
+    const rules = this._getForwardRuleState(environment, routeMetrics);
+    const mustStopForSignal = rules.signalDistance < 0.18 && rules.signalState >= 0.5;
+    const mustStopForCrosswalk = rules.crosswalkDistance < 0.18 && rules.crosswalkOccupied > 0.5;
+
+    if ((mustStopForSignal || mustStopForCrosswalk) && this.speed > 1.5) {
+      this.score -= 2.0 + this.speed * 0.4;
+    }
+
+    if (!mustStopForSignal && !mustStopForCrosswalk && this.speed < 0.3) {
+      this.score -= 0.05;
     }
   }
 }

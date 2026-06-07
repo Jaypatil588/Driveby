@@ -5,16 +5,18 @@ import torch
 import torch.nn as nn
 import websocket
 
+STATE_SIZE = 20
+
 
 class PolicyNet(nn.Module):
     def __init__(self):
         super(PolicyNet, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(16, 12),
+            nn.Linear(STATE_SIZE, 24),
             nn.ReLU(),
-            nn.Linear(12, 8),
+            nn.Linear(24, 12),
             nn.ReLU(),
-            nn.Linear(8, 2),
+            nn.Linear(12, 2),
             nn.Tanh(),
         )
 
@@ -72,8 +74,8 @@ def on_message(ws, message):
             raise ValueError(f"Observation has invalid agent id: {agent_id}")
 
         state_vector = obs.get("state")
-        if not isinstance(state_vector, list) or len(state_vector) != 16:
-            raise ValueError(f"Agent {agent_id} observation requires a 16-value state vector.")
+        if not isinstance(state_vector, list) or len(state_vector) != STATE_SIZE:
+            raise ValueError(f"Agent {agent_id} observation requires a {STATE_SIZE}-value state vector.")
 
         agent = agents[agent_id]
         if "collided" not in obs:

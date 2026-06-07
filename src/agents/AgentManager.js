@@ -66,7 +66,7 @@ export class AgentManager {
       const agent = this.getAgentById(action.id);
 
       if (action.reset) {
-        agent.reset(true);
+        agent.reset(false);
       } else {
         for (const key of ['throttle', 'steering', 'brake']) {
           if (!Number.isFinite(action[key])) {

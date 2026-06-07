@@ -1,81 +1,71 @@
-import * as THREE from 'three';
+import { Vector3 } from 'three';
+import roadData from './sfRoadData.json';
 import { worldToMapbox } from './sfLayer.js';
 
-const ROUTE_COORDS = [
-  [
-    [-122.4005, 37.7916],
-    [-122.3988, 37.7916],
-    [-122.3975, 37.7916],
-    [-122.3962, 37.7924],
-    [-122.3968, 37.7940],
-    [-122.3972, 37.7955],
-    [-122.3983, 37.7948],
-    [-122.3997, 37.7943],
-    [-122.4000, 37.7945],
-    [-122.4005, 37.7916],
-  ],
-  [
-    [-122.3988, 37.7916],
-    [-122.3995, 37.7930],
-    [-122.3980, 37.7935],
-    [-122.3985, 37.7950],
-    [-122.3983, 37.7948],
-  ],
-  [
-    [-122.3975, 37.7916],
-    [-122.3978, 37.7928],
-    [-122.3970, 37.7953],
-    [-122.3958, 37.7960],
-  ],
-  [
-    [-122.4005, 37.7916],
-    [-122.3993, 37.7922],
-    [-122.4010, 37.7938],
-    [-122.4002, 37.7963],
-  ],
-];
+export { roadData };
 
 export class RoadGraph {
-  constructor(routes = ROUTE_COORDS) {
+  constructor(data = roadData) {
+    this.data = data;
     this.nodes = [];
+    this.nodeById = new Map();
     this.adjacency = [];
-    this._buildGraph(routes.map((route) => route.map(([lng, lat]) => worldToMapbox(lng, lat, 0))));
+    this._buildGraph(data.roads);
 
     if (this.nodes.length < 2) {
       throw new Error('RoadGraph requires at least two road nodes.');
     }
   }
 
+  _getNode(nodeRef) {
+    let nodeIdx = this.nodeById.get(nodeRef.id);
+    if (nodeIdx !== undefined) return nodeIdx;
+
+    const pos = worldToMapbox(nodeRef.lng, nodeRef.lat, 0);
+    nodeIdx = this.nodes.length;
+    this.nodes.push({
+      id: nodeRef.id,
+      lng: nodeRef.lng,
+      lat: nodeRef.lat,
+      pos,
+    });
+    this.nodeById.set(nodeRef.id, nodeIdx);
+    this.adjacency.push([]);
+    return nodeIdx;
+  }
+
   _buildGraph(roads) {
-    const threshold = 8;
+    for (const road of roads) {
+      if (!Number.isInteger(road.forwardLanes) || !Number.isInteger(road.backwardLanes)) {
+        throw new Error(`Road ${road.id} is missing strict directional lane counts.`);
+      }
 
-    for (const polyline of roads) {
-      let prevIdx = -1;
+      for (let i = 0; i < road.nodes.length - 1; i++) {
+        const fromIdx = this._getNode(road.nodes[i]);
+        const toIdx = this._getNode(road.nodes[i + 1]);
+        if (fromIdx === toIdx) continue;
 
-      for (const pt of polyline) {
-        let nodeIdx = this._findCloseNode(pt, threshold);
-
-        if (nodeIdx === -1) {
-          this.nodes.push(pt.clone());
-          nodeIdx = this.nodes.length - 1;
-          this.adjacency.push([]);
-        }
-
-        if (prevIdx !== -1 && prevIdx !== nodeIdx) {
-          if (!this.adjacency[prevIdx].includes(nodeIdx)) this.adjacency[prevIdx].push(nodeIdx);
-          if (!this.adjacency[nodeIdx].includes(prevIdx)) this.adjacency[nodeIdx].push(prevIdx);
-        }
-
-        prevIdx = nodeIdx;
+        if (road.forwardLanes > 0) this._addEdge(fromIdx, toIdx, road, road.forwardLanes);
+        if (road.backwardLanes > 0) this._addEdge(toIdx, fromIdx, road, road.backwardLanes);
       }
     }
   }
 
-  _findCloseNode(pt, threshold) {
-    for (let i = 0; i < this.nodes.length; i++) {
-      if (this.nodes[i].distanceTo(pt) < threshold) return i;
-    }
-    return -1;
+  _addEdge(fromIdx, toIdx, road, laneCount) {
+    const from = this.nodes[fromIdx].pos;
+    const to = this.nodes[toIdx].pos;
+    const length = from.distanceTo(to);
+    if (length <= 0) throw new Error(`Road ${road.id} produced a zero-length graph edge.`);
+
+    this.adjacency[fromIdx].push({
+      from: fromIdx,
+      to: toIdx,
+      length,
+      laneCount,
+      roadId: road.id,
+      roadName: road.name,
+      highway: road.highway,
+    });
   }
 
   findPath(startIdx, endIdx) {
@@ -85,8 +75,9 @@ export class RoadGraph {
 
     const openSet = [startIdx];
     const cameFrom = new Map();
+    const cameEdge = new Map();
     const gScore = new Map([[startIdx, 0]]);
-    const fScore = new Map([[startIdx, this.nodes[startIdx].distanceTo(this.nodes[endIdx])]]);
+    const fScore = new Map([[startIdx, this.nodes[startIdx].pos.distanceTo(this.nodes[endIdx].pos)]]);
 
     while (openSet.length > 0) {
       let current = openSet[0];
@@ -103,74 +94,96 @@ export class RoadGraph {
       }
 
       if (current === endIdx) {
-        const path = [current];
+        const nodePath = [current];
+        const edgePath = [];
         while (cameFrom.has(current)) {
+          edgePath.unshift(cameEdge.get(current));
           current = cameFrom.get(current);
-          path.unshift(current);
+          nodePath.unshift(current);
         }
-        return path.map((idx) => this.nodes[idx]);
+        return {
+          nodeIndices: nodePath,
+          path: nodePath.map((idx) => this.nodes[idx].pos),
+          edges: edgePath,
+        };
       }
 
       openSet.splice(lowestIdx, 1);
 
-      for (const neighbor of this.adjacency[current]) {
-        const tentativeG = (gScore.get(current) ?? 0) + this.nodes[current].distanceTo(this.nodes[neighbor]);
-        if (tentativeG < (gScore.get(neighbor) ?? Infinity)) {
-          cameFrom.set(neighbor, current);
-          gScore.set(neighbor, tentativeG);
-          fScore.set(neighbor, tentativeG + this.nodes[neighbor].distanceTo(this.nodes[endIdx]));
-          if (!openSet.includes(neighbor)) openSet.push(neighbor);
+      for (const edge of this.adjacency[current]) {
+        const tentativeG = (gScore.get(current) ?? 0) + edge.length;
+        if (tentativeG < (gScore.get(edge.to) ?? Infinity)) {
+          cameFrom.set(edge.to, current);
+          cameEdge.set(edge.to, edge);
+          gScore.set(edge.to, tentativeG);
+          fScore.set(edge.to, tentativeG + this.nodes[edge.to].pos.distanceTo(this.nodes[endIdx].pos));
+          if (!openSet.includes(edge.to)) openSet.push(edge.to);
         }
       }
     }
 
-    throw new Error(`RoadGraph could not find a path from node ${startIdx} to node ${endIdx}.`);
+    throw new Error(`RoadGraph could not find a directed path from node ${startIdx} to node ${endIdx}.`);
   }
 
   getRandomNodeIdx() {
     return Math.floor(Math.random() * this.nodes.length);
   }
 
-  getValidRoute() {
-    for (let tries = 0; tries < 100; tries++) {
+  getValidRoute(minDistance = 100) {
+    for (let tries = 0; tries < 200; tries++) {
       const startIdx = this.getRandomNodeIdx();
       const endIdx = this.getRandomNodeIdx();
       if (startIdx === endIdx) continue;
-      if (this.nodes[startIdx].distanceTo(this.nodes[endIdx]) <= 60) continue;
+      if (this.nodes[startIdx].pos.distanceTo(this.nodes[endIdx].pos) <= minDistance) continue;
 
-      const path = this.findPath(startIdx, endIdx);
-      if (path.length >= 2) return { startIdx, endIdx, path };
+      try {
+        const route = this.findPath(startIdx, endIdx);
+        if (route.path.length >= 2 && route.edges.length === route.path.length - 1) {
+          return { startIdx, endIdx, ...route };
+        }
+      } catch (error) {
+        if (!String(error.message).startsWith('RoadGraph could not find a directed path')) throw error;
+      }
     }
 
-    throw new Error('RoadGraph could not produce a valid route after 100 attempts.');
+    throw new Error(`RoadGraph could not produce a valid directed route after 200 attempts with minDistance=${minDistance}.`);
   }
 }
 
-export function samplePathToWaypoints(path, count = 20) {
-  if (!Array.isArray(path) || path.length < 2) {
-    throw new Error('samplePathToWaypoints requires a path with at least two points.');
+export function sampleRouteToWaypoints(route, spacing = 18) {
+  if (!route || !Array.isArray(route.path) || !Array.isArray(route.edges) || route.path.length < 2) {
+    throw new Error('sampleRouteToWaypoints requires a route with path and directed edges.');
+  }
+  if (route.edges.length !== route.path.length - 1) {
+    throw new Error(`Route has ${route.path.length} points but ${route.edges.length} edges.`);
+  }
+  if (spacing <= 0) {
+    throw new Error(`sampleRouteToWaypoints requires positive spacing, received ${spacing}.`);
   }
 
   const segments = [];
   let totalLength = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    const a = path[i];
-    const b = path[i + 1];
+  for (let i = 0; i < route.path.length - 1; i++) {
+    const a = route.path[i];
+    const b = route.path[i + 1];
     const len = a.distanceTo(b);
-    if (len <= 0) throw new Error(`RoadGraph path has a zero-length segment at index ${i}.`);
-    segments.push({ a, b, len, startDist: totalLength });
+    if (len <= 0) throw new Error(`RoadGraph route has a zero-length segment at index ${i}.`);
+    segments.push({ a, b, len, startDist: totalLength, edge: route.edges[i] });
     totalLength += len;
   }
 
+  const count = Math.max(2, Math.ceil(totalLength / spacing) + 1);
   const step = totalLength / (count - 1);
   const waypoints = [];
+  const waypointEdges = [];
 
   for (let i = 0; i < count; i++) {
     const targetDist = i * step;
     const seg = segments.find((candidate) => targetDist <= candidate.startDist + candidate.len) ?? segments[segments.length - 1];
     const t = (targetDist - seg.startDist) / seg.len;
-    waypoints.push(new THREE.Vector3().lerpVectors(seg.a, seg.b, t));
+    waypoints.push(new Vector3().lerpVectors(seg.a, seg.b, t));
+    if (i > 0) waypointEdges.push(seg.edge);
   }
 
-  return waypoints;
+  return { waypoints, waypointEdges };
 }
