@@ -129,8 +129,27 @@ export class RoadGraph {
     return Math.floor(Math.random() * this.nodes.length);
   }
 
-  getValidRoute(minDistance = 100) {
-    for (let tries = 0; tries < 200; tries++) {
+  getValidRoute(minDistance = 100, excludedStarts = new Set(), excludedEnds = new Set()) {
+    for (let tries = 0; tries < 300; tries++) {
+      const startIdx = this.getRandomNodeIdx();
+      if (excludedStarts.has(startIdx)) continue;
+      const endIdx = this.getRandomNodeIdx();
+      if (excludedEnds.has(endIdx)) continue;
+      if (startIdx === endIdx) continue;
+      if (this.nodes[startIdx].pos.distanceTo(this.nodes[endIdx].pos) <= minDistance) continue;
+
+      try {
+        const route = this.findPath(startIdx, endIdx);
+        if (route.path.length >= 2 && route.edges.length === route.path.length - 1) {
+          return { startIdx, endIdx, ...route };
+        }
+      } catch (error) {
+        if (!String(error.message).startsWith('RoadGraph could not find a directed path')) throw error;
+      }
+    }
+
+    // fallback with relaxed exclusions if tight constraints cannot be satisfied
+    for (let tries = 0; tries < 100; tries++) {
       const startIdx = this.getRandomNodeIdx();
       const endIdx = this.getRandomNodeIdx();
       if (startIdx === endIdx) continue;
@@ -146,7 +165,7 @@ export class RoadGraph {
       }
     }
 
-    throw new Error(`RoadGraph could not produce a valid directed route after 200 attempts with minDistance=${minDistance}.`);
+    throw new Error(`RoadGraph could not produce a valid directed route after attempts with minDistance=${minDistance}.`);
   }
 }
 

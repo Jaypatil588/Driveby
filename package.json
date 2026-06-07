@@ -11,7 +11,7 @@
     "build": "webpack --mode production",
     "dev": "node server/dev.js",
     "start": "node server/index.js",
-    "rl:backend": "python3 rl/server.py"
+    "rl:backend": "python3 -u rl/server.py"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

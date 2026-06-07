@@ -15,7 +15,7 @@ const STUCK_SECONDS = 7;
 const STUCK_PROGRESS_MPS = 0.25;
 
 export class NeuralAgent extends CarAgent {
-  constructor(id, lng, lat, physicsWorld, scene, hue, roadGraph) {
+  constructor(id, lng, lat, physicsWorld, scene, hue, roadGraph, excludedStarts = new Set(), excludedEnds = new Set()) {
     super(id, lng, lat, physicsWorld, scene, hue, true);
 
     this.roadGraph = roadGraph;
@@ -37,10 +37,10 @@ export class NeuralAgent extends CarAgent {
     this.waypointEdges = [];
     this.stuckTimer = 0;
 
-    this.reset();
+    this.reset(false, excludedStarts, excludedEnds);
   }
 
-  reset(resetCurrentRoute = false) {
+  reset(resetCurrentRoute = false, excludedStarts = new Set(), excludedEnds = new Set()) {
     this.speed = 0;
     this.score = 0;
     this.collided = false;
@@ -50,7 +50,17 @@ export class NeuralAgent extends CarAgent {
     this.stuckTimer = 0;
 
     if (!resetCurrentRoute || this.waypoints.length < 2) {
-      const route = this.roadGraph.getValidRoute();
+      if (excludedStarts.size === 0 && excludedEnds.size === 0 && window.game?.agentManager) {
+        const otherAgents = window.game.agentManager.agents || [];
+        for (const a of otherAgents) {
+          if (a.id !== this.id) {
+            if (a.routeStartIdx !== null) excludedStarts.add(a.routeStartIdx);
+            if (a.routeEndIdx !== null) excludedEnds.add(a.routeEndIdx);
+          }
+        }
+      }
+
+      const route = this.roadGraph.getValidRoute(400, excludedStarts, excludedEnds);
       this.routeStartIdx = route.startIdx;
       this.routeEndIdx = route.endIdx;
       const sampled = sampleRouteToWaypoints(route);
@@ -150,7 +160,12 @@ export class NeuralAgent extends CarAgent {
 
     const before = this._getRouteMetrics(this.pos);
 
-    this.applyAction(this.lastAction, delta);
+    let actionToApply = this.lastAction;
+    if (this._detectPedestrianInFront(environment)) {
+      actionToApply = { throttle: 0, steering: this.lastAction.steering, brake: 1 };
+    }
+
+    this.applyAction(actionToApply, delta);
     this.pos.x += Math.sin(this.heading) * this.speed * delta;
     this.pos.z += Math.cos(this.heading) * this.speed * delta;
 
@@ -312,6 +327,23 @@ export class NeuralAgent extends CarAgent {
     this.score -= 100;
   }
 
+  _detectPedestrianInFront(environment) {
+    if (!environment || !Array.isArray(environment.pedestrians)) return false;
+
+    for (const ped of environment.pedestrians) {
+      const pedPos = ped.mesh.position;
+      const dist = this.pos.distanceTo(pedPos);
+      if (dist < 10.0) {
+        const angle = Math.atan2(pedPos.z - this.pos.z, pedPos.x - this.pos.x) - (Math.PI / 2 - this.heading);
+        const relAngle = Math.atan2(Math.sin(angle), Math.cos(angle));
+        if (Math.abs(relAngle) < Math.PI / 2) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   _checkStuck(delta, before, after, environment) {
     if (this.collided) return;
 
@@ -320,7 +352,9 @@ export class NeuralAgent extends CarAgent {
       (rules.signalDistance < 0.18 && rules.signalState >= 0.5) ||
       (rules.crosswalkDistance < 0.18 && rules.crosswalkOccupied > 0.5);
 
-    if (waitingForTrafficRule) {
+    const hasPedInFront = this._detectPedestrianInFront(environment);
+
+    if (waitingForTrafficRule || hasPedInFront) {
       this.stuckTimer = 0;
       return;
     }

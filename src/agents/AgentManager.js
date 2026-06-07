@@ -9,6 +9,7 @@ import {
 import { NeuralAgent } from './NeuralAgent.js';
 import { SensorCamera } from './SensorCamera.js';
 import { RoadGraph } from '../map/RoadGraph.js';
+import simulationConfig from '../../config/simulation.json';
 
 // 20 spawn points on real SF streets (Market, Montgomery, Kearny, etc.)
 const SPAWN_POINTS = [
@@ -21,8 +22,8 @@ const SPAWN_POINTS = [
   [-122.3956, 37.7958], [-122.4002, 37.7963],
 ];
 
-const AGENT_COUNT = 100;
-const SENSORS_ENABLED = 10;
+const AGENT_COUNT = simulationConfig.agentCount;
+const SENSORS_ENABLED = simulationConfig.sensorCount;
 const ROUTE_LINE_Y = 0.35;
 
 export class AgentManager {
@@ -40,7 +41,9 @@ export class AgentManager {
       const lng = spawn[0] + (Math.random() - 0.5) * 0.0002;
       const lat = spawn[1] + (Math.random() - 0.5) * 0.0002;
       const hue = i / AGENT_COUNT;
-      this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph));
+      const excludedStarts = new Set(this.agents.map(a => a.routeStartIdx).filter(x => x !== null));
+      const excludedEnds = new Set(this.agents.map(a => a.routeEndIdx).filter(x => x !== null));
+      this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph, excludedStarts, excludedEnds));
     }
 
     this._renderAgentRoutes();

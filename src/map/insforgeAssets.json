@@ -1,0 +1,9 @@
+{
+  "data/sf-osm-raw.json": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/raw-data%2Fsf-osm-raw.json?v=65e58e8d8500b9fe5921e6c1c00491ea",
+  "assets/models/Sedan.obj": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/models%2FSedan.obj?v=ef25d01ac0a1ee036360375c5d39b70a",
+  "assets/models/Sedan.mtl": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/models%2FSedan.mtl?v=0b8eef9aa44ebe0b6f9b9b32a56e5ad9",
+  "assets/models/FourDoorSedanC.jpg": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/models%2FFourDoorSedanC.jpg?v=7cc00789d95aca1dcf15901fe1019da5",
+  "assets/models/Lakerem.jpg": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/models%2FLakerem.jpg?v=869c42b7d1d3863784180ebcd8cc1646",
+  "assets/models/sf-lowpoly/Textures/Watter.nr.png": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/sf-lowpoly%2FTextures%2FWatter.nr.png?v=4d89517520c25b73fec200fe7c9f99b9",
+  "assets/models/sf-lowpoly/Textures/Watter.png": "https://runbpf4p.us-east.insforge.app/api/storage/buckets/driveby-assets/objects/sf-lowpoly%2FTextures%2FWatter.png?v=410ca31e726686a1b13b68aebde47151"
+}
