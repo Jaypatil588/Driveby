@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 import sys
+import threading
+import urllib.request
 
 import torch
 import torch.nn as nn
@@ -49,6 +51,43 @@ class AgentState:
 
 
 agents = {i: AgentState(i) for i in range(AGENT_COUNT)}
+
+
+def upload_log_to_insforge(agent_id, event, generation, score, best_score):
+    def run():
+        try:
+            proj_path = Path(__file__).resolve().parents[1] / ".insforge" / "project.json"
+            if not proj_path.exists():
+                raise FileNotFoundError(f"InsForge project config not found at {proj_path}")
+            with proj_path.open("r", encoding="utf-8") as f:
+                proj_data = json.load(f)
+            api_key = proj_data.get("api_key")
+            oss_host = proj_data.get("oss_host")
+            if not api_key or not oss_host:
+                raise ValueError("Missing api_key or oss_host in InsForge project.json")
+
+            url = f"{oss_host}/api/database/advance/rawsql"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            body = {
+                "query": "INSERT INTO agent_logs (agent_id, event, generation, score, best_score) VALUES ($1, $2, $3, $4, $5)",
+                "params": [int(agent_id), str(event), int(generation), float(score), float(best_score)]
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode("utf-8"),
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                response.read()
+        except Exception as e:
+            print(f"Failed to upload live log to InsForge: {e}", file=sys.stderr)
+            # Fail loudly by re-raising if it's a critical logic issue, or logging detailed error.
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def mutate_policy(parent_policy, child_policy, mutation_rate=0.25, mutation_scale=0.06):
@@ -116,6 +155,7 @@ def on_message(ws, message):
                 f"[Agent {agent_id}] CRASHED. Resetting gen {agent.generation} "
                 f"score={agent.score:.2f} best={agent.best_score:.2f}"
             )
+            upload_log_to_insforge(agent_id, "CRASHED", agent.generation, agent.score, agent.best_score)
 
         state_tensor = torch.FloatTensor(state_vector)
         with torch.no_grad():

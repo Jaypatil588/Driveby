@@ -51,6 +51,7 @@ This document lists the purpose, implementation, and core concepts for every maj
 ### `src/agents/NeuralAgent.js`
 - **Purpose**: Represents an autonomous vehicle agent controlled by a neural network.
 - **Implementation**: Uses raycasts (Three.js/Rapier3D) to sense obstacles in front and to the sides. Calculates rewards based on distance traveled, lane-centering, and collision avoidance.
+- **Safety Override**: Real-time forward-cone pedestrian detection within 10 meters triggers emergency braking (throttle=0, brake=1) and pauses the stuck-agent timer.
 - **Concept**: **Deep Reinforcement Learning Agent**. Maps continuous sensor readings (states) to discrete/continuous control commands (actions) via a deep neural model.
 
 ---
@@ -86,6 +87,7 @@ This document lists the purpose, implementation, and core concepts for every maj
 ### `src/map/RoadGraph.js`
 - **Purpose**: Directed road network graph for pathfinding.
 - **Implementation**: Parses compiled road lanes and intersections, building a directed adjacency list representation. Uses an A* (A-Star) heuristic search algorithm to compute shortest paths between road nodes.
+- **Distinct Routing**: Enhanced pathfinding to enforce that routes generated for agents are geographically distant (minimum 400 meters apart) and starts/ends are distinct from all other active agents.
 - **Concept**: **Geospatial Graph Routing**. Resolves continuous latitude/longitude paths into discrete graph nodes and edge traversals.
 
 ---
@@ -153,6 +155,7 @@ This document lists the purpose, implementation, and core concepts for every maj
 ### `rl/server.py`
 - **Purpose**: Python-based Deep Reinforcement Learning server.
 - **Implementation**: Built with PyTorch and websockets. Implements PPO (Proximal Policy Optimization) / DQN (Deep Q-Network) algorithms. Receives agent observation vectors, evaluates actions, updates model weights, and saves checkpoints.
+- **InsForge Integration**: Spawns asynchronous background threads using the standard library to publish real-time agent crash logs (agent ID, generation, score, best score) directly to the Postgres `agent_logs` table via the InsForge REST API.
 - **Concept**: **Off-Policy RL Agent Training**. Decouples slow, memory-intensive neural network gradient descents from high-speed client-side physics.
 
 ---

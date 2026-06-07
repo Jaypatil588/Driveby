@@ -41,7 +41,9 @@ export class AgentManager {
       const lng = spawn[0] + (Math.random() - 0.5) * 0.0002;
       const lat = spawn[1] + (Math.random() - 0.5) * 0.0002;
       const hue = i / AGENT_COUNT;
-      this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph));
+      const excludedStarts = new Set(this.agents.map(a => a.routeStartIdx).filter(x => x !== null));
+      const excludedEnds = new Set(this.agents.map(a => a.routeEndIdx).filter(x => x !== null));
+      this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph, excludedStarts, excludedEnds));
     }
 
     this._renderAgentRoutes();

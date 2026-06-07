@@ -31,12 +31,12 @@ class CameraToggle {
     } else {
       // follow cam: look in the car's direction of travel, pitched back
       const bearing = heading * 180 / Math.PI;
-      const target = { center: [lng, lat], bearing, pitch: 45, zoom: 20.5 };
+      const target = { center: [lng, lat], bearing, pitch: 45, zoom: 17.5 };
 
       // lerp bearing for smoothness, snap centre to the car
       const cur = this.map.getBearing();
       const smooth = cur + shortestAngle(cur, bearing) * 0.15;
-      this.map.jumpTo({ center: target.center, bearing: smooth, pitch: 45, zoom: 20.5 });
+      this.map.jumpTo({ center: target.center, bearing: smooth, pitch: 45, zoom: 17.5 });
     }
   }
 
