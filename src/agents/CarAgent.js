@@ -3,6 +3,7 @@ import { mapboxWorldToLngLat, worldToMapbox } from '../map/sfLayer.js';
 
 const MAX_SPEED_MS = 12;
 const VISIBLE_AGENT_CAR_LENGTH_M = 9.5;
+const AGENT_LABEL_Y = 11.5;
 
 export class CarAgent {
   constructor(id, lng, lat, physicsWorld, scene, hue, rlEnabled = false) {
@@ -87,10 +88,63 @@ export class CarAgent {
       halo.position.y = 0.08;
       halo.name = 'RL enabled footprint';
       this.mesh.add(halo);
+
+      const label = this._createAgentNumberLabel();
+      label.position.y = AGENT_LABEL_Y;
+      label.name = `Agent ${this.id} number label`;
+      this.mesh.add(label);
     }
 
     this.scene.add(this.mesh);
     this.mesh.position.copy(this.pos);
+  }
+
+  _createAgentNumberLabel() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 192;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error(`CarAgent ${this.id} could not create label canvas context.`);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = `#${this._colorHex.toString(16).padStart(6, '0')}`;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 10;
+    this._roundRect(ctx, 28, 24, 200, 136, 28);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#05070a';
+    ctx.font = 'bold 104px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(this.id + 1), 128, 93);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(13, 9.75, 1);
+    sprite.renderOrder = 100;
+    return sprite;
+  }
+
+  _roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   }
 
   _ruleBased(delta) {
