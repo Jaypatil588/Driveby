@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mapboxWorldToLngLat, worldToMapbox } from '../map/sfLayer.js';
 
 const MAX_SPEED_MS = 12;
+const VISIBLE_AGENT_CAR_LENGTH_M = 9.5;
 
 export class CarAgent {
   constructor(id, lng, lat, physicsWorld, scene, hue, rlEnabled = false) {
@@ -41,7 +42,7 @@ export class CarAgent {
     const center = new THREE.Vector3();
     box.getCenter(center);
 
-    const targetLength = 4.8;
+    const targetLength = VISIBLE_AGENT_CAR_LENGTH_M;
     const scale = targetLength / size.z;
     carModel.scale.set(scale, scale, scale);
     carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
@@ -71,15 +72,15 @@ export class CarAgent {
 
     if (this.rlEnabled) {
       const beacon = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.12, 0.12, 3.2, 12),
+        new THREE.CylinderGeometry(0.24, 0.24, 6.5, 12),
         new THREE.MeshBasicMaterial({ color: 0x00fff7 })
       );
-      beacon.position.y = 2.4;
+      beacon.position.y = 4.6;
       beacon.name = 'RL enabled beacon';
       this.mesh.add(beacon);
 
       const halo = new THREE.Mesh(
-        new THREE.TorusGeometry(1.7, 0.05, 8, 32),
+        new THREE.TorusGeometry(4.2, 0.12, 8, 40),
         new THREE.MeshBasicMaterial({ color: 0x00ff95 })
       );
       halo.rotation.x = Math.PI / 2;

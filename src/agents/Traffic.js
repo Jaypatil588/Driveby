@@ -6,6 +6,7 @@ import {
   ConeGeometry,
   BoxGeometry,
   MeshStandardMaterial,
+  MeshBasicMaterial,
   Box3,
   Vector3,
 } from 'three';
@@ -15,6 +16,8 @@ import { worldToMapbox } from '../map/sfLayer.js';
 const LANE_WIDTH_M = 3.6;
 const MAX_CROSSWALK_PEDS = 80;
 const MAX_TRAFFIC_CARS = 24;
+const VISIBLE_TRAFFIC_CAR_LENGTH_M = 9.5;
+const VISIBLE_PEDESTRIAN_SCALE = 2.4;
 const SIGNAL_CYCLE_SECONDS = 32;
 const SIGNAL_GREEN_SECONDS = 12;
 const SIGNAL_YELLOW_SECONDS = 3;
@@ -206,18 +209,44 @@ class TrafficManager {
 
   createPedestrian(crosswalk, color, sequence) {
     const group = new Group();
+    const stickMat = new MeshBasicMaterial({ color });
+    const headMat = new MeshBasicMaterial({ color: 0xfff3b0 });
 
-    const bodyGeo = new CylinderGeometry(0.18, 0.18, 1.1, 8);
-    const bodyMat = new MeshStandardMaterial({ color, roughness: 0.6 });
-    const body = new Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.55;
-    group.add(body);
+    const torso = this._stickLimb(1.45, stickMat);
+    torso.position.y = 1.05;
+    group.add(torso);
 
-    const headGeo = new SphereGeometry(0.15, 8, 8);
-    const headMat = new MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
+    const shoulder = this._stickLimb(1.15, stickMat);
+    shoulder.position.y = 1.55;
+    shoulder.rotation.z = Math.PI / 2;
+    group.add(shoulder);
+
+    const leftArm = this._stickLimb(1.0, stickMat);
+    leftArm.position.set(-0.56, 1.13, 0);
+    leftArm.rotation.z = -0.55;
+    group.add(leftArm);
+
+    const rightArm = this._stickLimb(1.0, stickMat);
+    rightArm.position.set(0.56, 1.13, 0);
+    rightArm.rotation.z = 0.55;
+    group.add(rightArm);
+
+    const leftLeg = this._stickLimb(1.15, stickMat);
+    leftLeg.position.set(-0.28, 0.28, 0);
+    leftLeg.rotation.z = 0.35;
+    group.add(leftLeg);
+
+    const rightLeg = this._stickLimb(1.15, stickMat);
+    rightLeg.position.set(0.28, 0.28, 0);
+    rightLeg.rotation.z = -0.35;
+    group.add(rightLeg);
+
+    const headGeo = new SphereGeometry(0.38, 16, 12);
     const head = new Mesh(headGeo, headMat);
-    head.position.y = 1.2;
+    head.position.y = 2.02;
     group.add(head);
+
+    group.scale.set(VISIBLE_PEDESTRIAN_SCALE, VISIBLE_PEDESTRIAN_SCALE, VISIBLE_PEDESTRIAN_SCALE);
 
     this.scene.add(group);
 
@@ -259,7 +288,7 @@ class TrafficManager {
     const center = new Vector3();
     box.getCenter(center);
 
-    const targetLength = 4.8;
+    const targetLength = VISIBLE_TRAFFIC_CAR_LENGTH_M;
     const scale = targetLength / size.z;
     carModel.scale.set(scale, scale, scale);
     carModel.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
@@ -303,33 +332,33 @@ class TrafficManager {
   createTrafficLight(signal) {
     const group = new Group();
 
-    const postGeo = new CylinderGeometry(0.06, 0.08, 3.2, 8);
+    const postGeo = new CylinderGeometry(0.18, 0.24, 7.2, 10);
     const postMat = new MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.2 });
     const post = new Mesh(postGeo, postMat);
-    post.position.y = 1.6;
+    post.position.y = 3.6;
     group.add(post);
 
-    const headGeo = new BoxGeometry(0.3, 0.8, 0.3);
+    const headGeo = new BoxGeometry(1.25, 3.0, 1.0);
     const headMat = new MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
     const head = new Mesh(headGeo, headMat);
-    head.position.set(0, 3.0, 0);
+    head.position.set(0, 6.3, 0);
     group.add(head);
 
-    const lightGeo = new SphereGeometry(0.08, 8, 8);
+    const lightGeo = new SphereGeometry(0.36, 16, 12);
     const redMat = new MeshStandardMaterial({ color: 0x330000, emissive: 0x000000, roughness: 0.5 });
     const yellowMat = new MeshStandardMaterial({ color: 0x333300, emissive: 0x000000, roughness: 0.5 });
     const greenMat = new MeshStandardMaterial({ color: 0x003300, emissive: 0x000000, roughness: 0.5 });
 
     const redLight = new Mesh(lightGeo, redMat);
-    redLight.position.set(0, 3.25, 0.15);
+    redLight.position.set(0, 7.0, 0.52);
     group.add(redLight);
 
     const yellowLight = new Mesh(lightGeo, yellowMat);
-    yellowLight.position.set(0, 3.0, 0.15);
+    yellowLight.position.set(0, 6.3, 0.52);
     group.add(yellowLight);
 
     const greenLight = new Mesh(lightGeo, greenMat);
-    greenLight.position.set(0, 2.75, 0.15);
+    greenLight.position.set(0, 5.6, 0.52);
     group.add(greenLight);
 
     const pos = worldToMapbox(signal.lng, signal.lat, 0);
@@ -493,6 +522,11 @@ class TrafficManager {
 
   _rightVector(heading) {
     return new Vector3(Math.cos(heading), 0, -Math.sin(heading));
+  }
+
+  _stickLimb(length, material) {
+    const limb = new Mesh(new CylinderGeometry(0.085, 0.085, length, 10), material);
+    return limb;
   }
 }
 

@@ -27,7 +27,7 @@ class CameraToggle {
     const { lng, lat, heading } = car.getPosition();
 
     if (this.mode === 'bird') {
-      this.map.jumpTo({ center: [lng, lat], bearing: 0, pitch: 0, zoom: 19 });
+      this.map.jumpTo({ center: [lng, lat], bearing: 0, pitch: 0, zoom: 16.25 });
     } else {
       // follow cam: look in the car's direction of travel, pitched back
       const bearing = heading * 180 / Math.PI;

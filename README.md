@@ -6,11 +6,25 @@ Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Been
 
 ---
 
+## Highlights
+
+- OSM-derived SF road graph with directed A* routing across real downtown street geometry.
+- One-way streets, directional lane counts, and lane-change boundaries are enforced per road segment.
+- RL agents learn local control on assigned A-to-B routes instead of teleporting or free-roaming off-road.
+- Multi-lane roads allow legal lane changes while single-lane roads stay physically constrained.
+- Global traffic-light timing runs on one recurring simulation clock, with synchronized red/yellow/green phases.
+- Crosswalk pedestrians follow recurring walk/clearance cycles tied to the same citywide signal pattern.
+- Agents observe route progress, lane offset, traffic-light state, crosswalk occupancy, nearby cars, pedestrians, and buildings.
+- NPC traffic follows valid directed roads and responds to red lights and occupied crosswalks.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Map & 3D buildings | MapLibre GL JS (free, no API key) |
+| Road, lane & signal data | OpenStreetMap / Overpass extract |
 | 3D agents & scene | Three.js (custom MapLibre layer) |
 | Physics & collision | Rapier.js (WASM, runs in browser) |
 | Web server | Node.js + Express |
@@ -80,11 +94,15 @@ The in-app backend indicator should show `backend-connected`, and `RL controlled
 │   ├── index.js              — app bootstrap
 │   ├── map/
 │   │   ├── mapbox.js         — MapLibre GL JS init, SF downtown view
+│   │   ├── RoadGraph.js      — directed OSM road graph and A* route sampler
+│   │   ├── sfRoadData.json   — generated SF road, lane, signal, and crossing data
 │   │   └── sfLayer.js        — Three.js custom layer injected into MapLibre
 │   ├── agents/
 │   │   ├── PlayerCar.js      — human-controlled car (WASD)
 │   │   ├── CarAgent.js       — single AI agent
 │   │   ├── AgentManager.js   — spawns and updates all 10 RL-enabled agents
+│   │   ├── NeuralAgent.js    — route-following RL vehicle with lane and traffic-rule observations
+│   │   ├── Traffic.js        — global traffic-light clock, crosswalk cycles, peds, and NPC cars
 │   │   └── SensorCamera.js   — WebGLRenderTarget front/back/side cameras
 │   ├── physics/
 │   │   ├── PhysicsWorld.js   — Rapier.js world
@@ -93,10 +111,14 @@ The in-app backend indicator should show `backend-connected`, and `RL controlled
 │   │   └── AgentSocket.js    — WebSocket client (observations out, actions in)
 │   └── ui/
 │       └── CameraToggle.js   — bird's eye and follow camera manager
-└── server/
-    ├── dev.js                — full dev stack launcher
-    ├── index.js              — Express server, WebSocket relay, and RL backend launcher
-    └── wsRelay.js            — WebSocket relay to RL backend (port 3001)
+├── data/
+│   └── sf-osm-raw.json       — checked Overpass extract used to generate runtime road data
+├── server/
+│   ├── dev.js                — full dev stack launcher
+│   ├── index.js              — Express server, WebSocket relay, and RL backend launcher
+│   └── wsRelay.js            — WebSocket relay to RL backend (port 3001)
+└── tools/
+    └── buildSfRoadData.js    — converts the Overpass extract into strict runtime map data
 ```
 
 ---
@@ -114,7 +136,7 @@ The browser sends observations to the RL backend through `ws://localhost:3001?ty
 {
   "type": "observations",
   "tick": 1234,
-  "agents": [{ "id": 0, "state": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6], "collided": false, "score": 12.3 }]
+  "agents": [{ "id": 0, "state": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], "collided": false, "score": 12.3 }]
 }
 ```
 

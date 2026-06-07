@@ -1,3 +1,11 @@
+import {
+  CatmullRomCurve3,
+  Color,
+  Mesh,
+  MeshBasicMaterial,
+  TubeGeometry,
+  Vector3,
+} from 'three';
 import { NeuralAgent } from './NeuralAgent.js';
 import { SensorCamera } from './SensorCamera.js';
 import { RoadGraph } from '../map/RoadGraph.js';
@@ -15,10 +23,12 @@ const SPAWN_POINTS = [
 
 const AGENT_COUNT = 10;
 const SENSORS_ENABLED = 10;
+const ROUTE_LINE_Y = 0.35;
 
 export class AgentManager {
   constructor(physicsWorld, sfLayer) {
     this.agents = [];
+    this.routeLines = new Map();
     this._actionQueue = new Map(); // id → action
     this.sfLayer = sfLayer;
     this._camerasInitialized = false;
@@ -32,6 +42,8 @@ export class AgentManager {
       const hue = i / AGENT_COUNT;
       this.agents.push(new NeuralAgent(i, lng, lat, physicsWorld, sfLayer.scene, hue, this.roadGraph));
     }
+
+    this._renderAgentRoutes();
   }
 
   update(delta, environment) {
@@ -51,6 +63,7 @@ export class AgentManager {
         this._actionQueue.delete(agent.id);
       }
       agent.update(delta, this.agents, environment);
+      this._refreshRouteLineIfNeeded(agent);
     }
   }
 
@@ -67,6 +80,7 @@ export class AgentManager {
 
       if (action.reset) {
         agent.reset(false);
+        this._setRouteLine(agent);
       } else {
         for (const key of ['throttle', 'steering', 'brake']) {
           if (!Number.isFinite(action[key])) {
@@ -98,5 +112,50 @@ export class AgentManager {
       rlControlled,
       avgSpeed
     };
+  }
+
+  _renderAgentRoutes() {
+    for (const agent of this.agents) this._setRouteLine(agent);
+  }
+
+  _setRouteLine(agent) {
+    const existing = this.routeLines.get(agent.id);
+    if (existing) {
+      this.sfLayer.scene.remove(existing);
+      existing.geometry.dispose();
+      existing.material.dispose();
+    }
+
+    const points = agent.waypoints.map((point) => new Vector3(point.x, ROUTE_LINE_Y, point.z));
+    if (points.length < 2) {
+      throw new Error(`Agent ${agent.id} cannot render route line with ${points.length} waypoints.`);
+    }
+
+    const curve = new CatmullRomCurve3(points);
+    const geometry = new TubeGeometry(curve, Math.max(12, points.length * 2), 1.15, 8, false);
+    const color = new Color().setHSL(agent.id / AGENT_COUNT, 1, 0.62);
+    const material = new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: false,
+    });
+    const line = new Mesh(geometry, material);
+    line.name = `Agent ${agent.id} A* route`;
+    line.renderOrder = 50;
+    line.userData.routeKey = this._routeKey(agent);
+    this.sfLayer.scene.add(line);
+    this.routeLines.set(agent.id, line);
+  }
+
+  _refreshRouteLineIfNeeded(agent) {
+    const line = this.routeLines.get(agent.id);
+    if (!line || line.userData.routeKey !== this._routeKey(agent)) {
+      this._setRouteLine(agent);
+    }
+  }
+
+  _routeKey(agent) {
+    return `${agent.routeStartIdx}:${agent.routeEndIdx}:${agent.waypoints.length}`;
   }
 }
