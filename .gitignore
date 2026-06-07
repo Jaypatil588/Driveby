@@ -21,3 +21,7 @@ dist/
 
 # Large 3D models and textures
 assets/models/sf-lowpoly/
+
+# Python generated files & dataset output
+rl/__pycache__/
+rl/dataset/
