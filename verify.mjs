@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const URL = 'http://localhost:8080/index.html';
+const URL = 'http://localhost:3000/index.html';
 
 const browser = await chromium.launch({
   headless: true,
