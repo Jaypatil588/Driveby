@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import sys
 
 import torch
@@ -6,7 +7,19 @@ import torch.nn as nn
 import websocket
 
 STATE_SIZE = 20
-AGENT_COUNT = 100
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "simulation.json"
+
+
+def load_agent_count():
+    with CONFIG_PATH.open("r", encoding="utf-8") as config_file:
+        config = json.load(config_file)
+    agent_count = config.get("agentCount")
+    if not isinstance(agent_count, int) or agent_count <= 0:
+        raise ValueError(f"config/simulation.json requires positive integer agentCount, received {agent_count}.")
+    return agent_count
+
+
+AGENT_COUNT = load_agent_count()
 
 
 class PolicyNet(nn.Module):

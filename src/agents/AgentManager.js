@@ -9,6 +9,7 @@ import {
 import { NeuralAgent } from './NeuralAgent.js';
 import { SensorCamera } from './SensorCamera.js';
 import { RoadGraph } from '../map/RoadGraph.js';
+import simulationConfig from '../../config/simulation.json';
 
 // 20 spawn points on real SF streets (Market, Montgomery, Kearny, etc.)
 const SPAWN_POINTS = [
@@ -21,8 +22,8 @@ const SPAWN_POINTS = [
   [-122.3956, 37.7958], [-122.4002, 37.7963],
 ];
 
-const AGENT_COUNT = 100;
-const SENSORS_ENABLED = 10;
+const AGENT_COUNT = simulationConfig.agentCount;
+const SENSORS_ENABLED = simulationConfig.sensorCount;
 const ROUTE_LINE_Y = 0.35;
 
 export class AgentManager {

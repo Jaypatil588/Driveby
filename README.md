@@ -1,6 +1,6 @@
 # DriveBy — SF Multi-Agent RL Driving Environment
 
-A browser-based reinforcement learning environment set in real San Francisco downtown. Ten autonomous car agents drive simultaneously through the SF Financial District, each wired for backend-driven policy actions. A human player can take control at any time using WASD keys.
+A browser-based reinforcement learning environment set in real San Francisco downtown. Twenty configurable autonomous car agents drive simultaneously through the SF Financial District, each wired for backend-driven policy actions. A human player can take control at any time using WASD keys.
 
 Built on top of [SynthCity](https://github.com/jeffbeene/synthcity) by Jeff Beene — the Three.js renderer setup and Bladerunner Sedan car model are derived from that project.
 
@@ -72,6 +72,19 @@ npm run rl:backend
 
 The in-app backend indicator should show `backend-connected`, and `RL controlled` should update as action messages arrive.
 
+### Simulation config
+
+Change `config/simulation.json` to switch fleet size without touching code:
+
+```json
+{
+  "agentCount": 20,
+  "sensorCount": 10
+}
+```
+
+Restart `npm run dev` after changing the config so both the browser bundle and Python backend read the same values.
+
 ---
 
 ## Controls
@@ -113,6 +126,8 @@ The in-app backend indicator should show `backend-connected`, and `RL controlled
 │       └── CameraToggle.js   — bird's eye and follow camera manager
 ├── data/
 │   └── sf-osm-raw.json       — checked Overpass extract used to generate runtime road data
+├── config/
+│   └── simulation.json       — shared browser/Python agent and sensor counts
 ├── server/
 │   ├── dev.js                — full dev stack launcher
 │   ├── index.js              — Express server, WebSocket relay, and RL backend launcher
