@@ -51,7 +51,11 @@ class Game {
 
     this.map = createMap('map');
     this.sfLayer = new SFLayer();
-    this.map.on('load', () => this.onMapLoad());
+    if (this.map.loaded()) {
+      this.onMapLoad();
+    } else {
+      this.map.on('load', () => this.onMapLoad());
+    }
   }
 
   onMapLoad() {
@@ -80,12 +84,13 @@ class Game {
     });
     this.agentSocket.setEnvironment(this.traffic);
     this.focusTarget = this.player;
-    this.trainingHud = new TrainingHUD(this.agentManager.agents, (agentId) => {
-      this.focusTarget = this.agentManager.getAgentById(agentId);
-    });
-
     // camera toggle (bird's eye <-> follow), C key
     this.cameraToggle = new CameraToggle(this.map, document.getElementById('hud'));
+
+    this.trainingHud = new TrainingHUD(this.agentManager.agents, (agentId) => {
+      this.focusTarget = this.agentManager.getAgentById(agentId);
+      this.cameraToggle.follow();
+    });
 
     // per-frame update, driven by Mapbox's continuous repaint
     this.lastTime = performance.now();

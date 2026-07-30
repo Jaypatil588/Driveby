@@ -172,6 +172,16 @@ export class TrainingHUD {
 
     this.container = document.createElement('div');
     this.container.id = 'training-hud';
+    this.container.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-agent-id]');
+      if (!button || !this.container.contains(button)) return;
+
+      const id = Number(button.dataset.agentId);
+      if (!Number.isInteger(id)) {
+        throw new Error(`TrainingHUD received invalid agent id: ${button.dataset.agentId}.`);
+      }
+      this.selectAgent(id);
+    });
     document.body.appendChild(this.container);
     this.render();
   }
@@ -276,7 +286,7 @@ export class TrainingHUD {
     let gridHtml = '';
     for (let i = 0; i < this.agents.length; i++) {
       const activeClass = this.selectedAgentId === i ? 'active' : '';
-      gridHtml += `<div class="agent-btn ${activeClass}" onclick="window.hud.selectAgent(${i})">Agent ${i + 1}</div>`;
+      gridHtml += `<button type="button" class="agent-btn ${activeClass}" data-agent-id="${i}">Agent ${i + 1}</button>`;
     }
 
     const agent = this.agents[this.selectedAgentId];
@@ -305,7 +315,5 @@ export class TrainingHUD {
         <div class="state-vector-box" id="state-vector-container">Loading state vector...</div>
       </div>
     `;
-
-    window.hud = this;
   }
 }

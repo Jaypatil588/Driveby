@@ -17,7 +17,19 @@ class CameraToggle {
   }
 
   toggle() {
-    this.mode = this.mode === 'bird' ? 'follow' : 'bird';
+    this.setMode(this.mode === 'bird' ? 'follow' : 'bird');
+  }
+
+  follow() {
+    this.setMode('follow');
+  }
+
+  setMode(mode) {
+    if (mode !== 'bird' && mode !== 'follow') {
+      throw new Error(`CameraToggle cannot switch to unknown mode: ${mode}.`);
+    }
+
+    this.mode = mode;
     this.updateLabel();
   }
 

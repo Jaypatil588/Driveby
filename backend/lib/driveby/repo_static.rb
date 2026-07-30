@@ -5,7 +5,8 @@ require "rack/files"
 module Driveby
   # Serves the simulator frontend from the monorepo root (sibling of backend/).
   class RepoStatic
-    PASS_PREFIXES = %w[/api /cable /rails /up /assets].freeze
+    # Only Rails endpoints — do NOT pass /assets (simulator models/textures live there).
+    PASS_PREFIXES = %w[/api /cable /rails /up].freeze
 
     def initialize(app, root:)
       @app = app
